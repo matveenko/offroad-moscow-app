@@ -2,8 +2,9 @@ import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-ro
 import { Calendar, Map, Home, User, ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
+import EventDetails from './pages/EventDetails'; // Убедись, что файл существует
 
-// Типы данных (чтобы TypeScript не ругался)
+// Типы данных
 interface Event {
   id: number;
   title: string;
@@ -11,6 +12,8 @@ interface Event {
   location: string;
   price: number;
 }
+
+// --- КОМПОНЕНТЫ ---
 
 const HomePage = () => (
   <div className="p-6 space-y-6 pb-24">
@@ -24,7 +27,6 @@ const HomePage = () => (
       </div>
     </header>
 
-    {/* Статичный блок (потом тоже оживим) */}
     <div className="bg-gradient-to-br from-offroad-dark to-black border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
       <div className="absolute top-0 right-0 w-20 h-20 bg-offroad-orange blur-3xl opacity-20 -mr-10 -mt-10"></div>
       <div className="relative z-10">
@@ -43,7 +45,6 @@ const EventsPage = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Фетчим данные при загрузке страницы
   useEffect(() => {
     getEvents();
   }, []);
@@ -53,7 +54,7 @@ const EventsPage = () => {
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .order('date', { ascending: true }); // Сортируем по дате
+        .order('date', { ascending: true });
 
       if (error) throw error;
       if (data) setEvents(data);
@@ -77,26 +78,27 @@ const EventsPage = () => {
       ) : (
         <div className="space-y-4">
           {events.map((event) => (
-            <div key={event.id} className="bg-offroad-dark border border-gray-800 rounded-xl p-4 flex gap-4 hover:border-offroad-orange/50 transition-colors cursor-pointer">
-              <div className="flex-col flex items-center justify-center bg-gray-900 rounded-lg w-16 h-16 border border-gray-700 shrink-0">
-                {/* Форматируем дату JS */}
-                <span className="text-offroad-orange font-bold text-xl">
-                  {new Date(event.date).getDate()}
-                </span>
-                <span className="text-[10px] text-gray-500 uppercase">
-                  {new Date(event.date).toLocaleString('default', { month: 'short' })}
-                </span>
-              </div>
-              <div>
-                <h3 className="font-bold text-lg leading-tight">{event.title}</h3>
-                <div className="flex items-center mt-1 text-gray-400 text-xs">
-                   <Map size={12} className="mr-1" /> {event.location}
+            <Link to={`/event/${event.id}`} key={event.id} className="block">
+              <div className="bg-offroad-dark border border-gray-800 rounded-xl p-4 flex gap-4 hover:border-offroad-orange/50 transition-colors cursor-pointer">
+                <div className="flex-col flex items-center justify-center bg-gray-900 rounded-lg w-16 h-16 border border-gray-700 shrink-0">
+                  <span className="text-offroad-orange font-bold text-xl">
+                    {new Date(event.date).getDate()}
+                  </span>
+                  <span className="text-[10px] text-gray-500 uppercase">
+                    {new Date(event.date).toLocaleString('default', { month: 'short' })}
+                  </span>
                 </div>
-                <div className="mt-2 inline-block bg-gray-800 px-2 py-0.5 rounded text-[10px] text-gray-300">
-                  {event.price} ₽
+                <div>
+                  <h3 className="font-bold text-lg leading-tight">{event.title}</h3>
+                  <div className="flex items-center mt-1 text-gray-400 text-xs">
+                     <Map size={12} className="mr-1" /> {event.location}
+                  </div>
+                  <div className="mt-2 inline-block bg-gray-800 px-2 py-0.5 rounded text-[10px] text-gray-300">
+                    {event.price} ₽
+                  </div>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
@@ -104,19 +106,37 @@ const EventsPage = () => {
   );
 };
 
-const NavPage = () => (
-  <div className="p-6 pb-24">
-    <h1 className="text-3xl font-black text-white mb-6">Навигация</h1>
-    <div className="space-y-2">
-      {['Правила чата', 'Как подготовить авто', 'FAQ для новичков', 'Контакты оргов'].map((topic) => (
-        <a href="#" key={topic} className="block bg-offroad-dark border border-gray-800 p-4 rounded-xl flex justify-between items-center active:bg-gray-800">
-          <span className="font-medium">{topic}</span>
-          <ChevronRight size={16} className="text-gray-500"/>
-        </a>
-      ))}
+const NavPage = () => {
+  // Ссылки на канал (Замени на свои реальные!)
+  const topics = [
+    { title: 'Правила чата', link: 'https://t.me/offroad_moscow/1' },
+    { title: 'Как подготовить авто', link: 'https://t.me/offroad_moscow/2' },
+    { title: 'Минимальный набор ZIP', link: 'https://t.me/offroad_moscow/3' },
+    { title: 'Контакты админов', link: 'https://t.me/offroad_moscow/4' },
+  ];
+
+  return (
+    <div className="p-6 pb-24">
+      <h1 className="text-3xl font-black text-white mb-6">База Знаний</h1>
+      <div className="space-y-3">
+        {topics.map((topic, index) => (
+          <a 
+            href={topic.link} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            key={index} 
+            className="block bg-offroad-dark border border-gray-800 p-5 rounded-xl flex justify-between items-center active:bg-gray-800 active:scale-[0.98] transition-all"
+          >
+            <span className="font-bold text-gray-200">{topic.title}</span>
+            <div className="bg-black/40 p-2 rounded-full">
+               <ChevronRight size={16} className="text-offroad-orange"/>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const TabBar = () => {
   const location = useLocation();
@@ -149,6 +169,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/events" element={<EventsPage />} />
+          <Route path="/event/:id" element={<EventDetails />} />
           <Route path="/nav" element={<NavPage />} />
         </Routes>
         <TabBar />
