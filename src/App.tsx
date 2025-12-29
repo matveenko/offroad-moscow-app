@@ -1,5 +1,5 @@
-import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'; // <--- Добавил Navigate
-import { Calendar, Map, Home, User, ChevronRight, Loader2 } from 'lucide-react';
+import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import { Calendar, Map, Home, User, ChevronRight, Loader2, CloudRain, PlayCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import WebApp from '@twa-dev/sdk';
@@ -10,11 +10,6 @@ import EventDetails from './pages/EventDetails';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 
-// --- КОМПОНЕНТЫ ---
-// HomePage мы сейчас перепишем отдельно, пока оставь заглушку или удали старый код HomePage отсюда, 
-// так как мы создадим его отдельным файлом (рекомендую) или вставим обновленный ниже.
-// ДЛЯ ПРОСТОТЫ: Я вставлю обновленный HomePage прямо сюда.
-
 // --- ТИПЫ ---
 interface Story {
   id: number;
@@ -23,8 +18,16 @@ interface Story {
   link: string;
 }
 
-// --- НОВЫЙ HOMEPAGE (ПРИЧЕСАННЫЙ) ---
-import { CloudRain, PlayCircle, } from 'lucide-react';
+interface Event {
+  id: number;
+  title: string;
+  date: string;
+  location: string;
+  price: number;
+  image_url?: string;
+}
+
+// --- КОМПОНЕНТЫ ---
 
 const HomePage = () => {
   const user = WebApp.initDataUnsafe.user;
@@ -40,20 +43,21 @@ const HomePage = () => {
     fetchStories();
   }, []);
 
+  // Обертка max-w-md mx-auto держит форму мобилки даже на ПК
   return (
-    <div className="p-4 space-y-8 pb-32 animate-in fade-in duration-500">
+    <div className="max-w-md mx-auto w-full space-y-6 pb-32 animate-in fade-in duration-500 pt-6">
       
-      {/* 1. Хедер (Минимализм) */}
-      <header className="flex justify-between items-center px-2">
+      {/* 1. Хедер */}
+      <header className="flex justify-between items-center px-6">
         <div>
           <h1 className="text-2xl font-black text-white tracking-tighter">
-            {user?.first_name || 'Незнакомец'}
+            {user?.first_name || 'Бродяга'}
             <span className="text-offroad-orange">.</span>
           </h1>
           <p className="text-gray-500 text-xs font-medium">Готов месить?</p>
         </div>
         
-        {/* Виджет погоды (Стеклянный) */}
+        {/* Виджет */}
         <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-2 flex items-center gap-2 shadow-lg">
           <CloudRain size={18} className="text-blue-400" />
           <div>
@@ -63,72 +67,75 @@ const HomePage = () => {
         </div>
       </header>
 
-      <div className="absolute inset-0 bg-gray-800"> {/* Подложка, если картинка не прогрузится */}
-            <img 
-                src="https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1920&auto=format&fit=crop" 
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                alt="Offroad"
-                onError={(e) => {
-                    e.currentTarget.style.display = 'none'; // Если сломалась — скрываем, останется серый фон
-                }}
-        />
-        
-        {/* Градиент, чтобы текст читался */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
-
-        {/* Контент поверх картинки */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col items-start z-10">
+      {/* 2. ГЛАВНЫЙ БАННЕР */}
+      <div className="px-4"> 
+        <div className="relative w-full h-[450px] rounded-[32px] overflow-hidden shadow-2xl group isolate">
             
-            {/* Бейдж "Сезон 2025" */}
-            <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full mb-4">
-                <div className="w-1.5 h-1.5 rounded-full bg-offroad-orange animate-pulse"></div>
-                <span className="text-white text-[10px] font-bold uppercase tracking-wider">Сезон Открыт</span>
+            {/* Картинка: ГРЯЗЬ */}
+            <div className="absolute inset-0 bg-gray-800">
+                <img 
+                    src="https://images.unsplash.com/photo-1519245659620-e859806a8d3b?q=80&w=800&auto=format&fit=crop" 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    alt="Offroad"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
             </div>
-
-            <h2 className="text-4xl font-black text-white leading-[0.95] mb-2 drop-shadow-lg">
-              ВРЕМЯ<br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-offroad-orange to-orange-500">ГРЯЗИ</span>
-            </h2>
             
-            <p className="text-gray-200 text-sm font-medium mb-6 max-w-[80%] drop-shadow-md opacity-90">
-              Хватит сидеть дома. Леса зовут, лебедки скучают.
-            </p>
+            {/* Градиент */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
 
-            {/* Кнопка (Светящаяся) */}
-            <Link to="/events" className="w-full bg-offroad-orange text-white font-black uppercase tracking-wide py-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:shadow-[0_0_40px_rgba(249,115,22,0.6)] transition-all active:scale-[0.98]">
-               <span>Календарь Выездов</span>
-               <ChevronRight size={18} />
-            </Link>
+            {/* Контент */}
+            <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col items-start z-10">
+                
+                <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-offroad-orange animate-pulse"></div>
+                    <span className="text-white text-[10px] font-bold uppercase tracking-wider">Сезон Открыт</span>
+                </div>
+
+                <h2 className="text-4xl font-black text-white leading-[0.9] mb-3 drop-shadow-xl">
+                  ВРЕМЯ<br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-offroad-orange to-red-500">ГРЯЗИ</span>
+                </h2>
+                
+                <p className="text-gray-300 text-sm font-medium mb-6 max-w-[90%] drop-shadow-md">
+                  Лес, колея и лебедка. Всё как ты любишь.
+                </p>
+
+                <Link to="/events" className="w-full bg-offroad-orange text-white font-black uppercase tracking-wide py-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(249,115,22,0.4)] active:scale-[0.98] transition-all">
+                   <span>Календарь</span>
+                   <ChevronRight size={18} />
+                </Link>
+            </div>
         </div>
       </div>
 
-      {/* 3. Лента новостей (Stories) */}
+      {/* 3. Лента новостей */}
       <div>
-        <h3 className="text-lg font-bold text-white mb-4 px-2 flex items-center gap-2">
+        <h3 className="text-lg font-bold text-white mb-4 px-6 flex items-center gap-2">
           <PlayCircle size={18} className="text-offroad-orange"/>
           <span>Хроники</span>
         </h3>
         
         {loading ? (
-            <div className="flex gap-3 px-2 overflow-hidden">
+            <div className="flex gap-3 px-6 overflow-hidden">
                 {[1,2,3].map(i => <div key={i} className="w-28 h-40 bg-gray-800 rounded-xl animate-pulse shrink-0"/>)}
             </div>
         ) : stories.length === 0 ? (
-           <div className="mx-2 bg-offroad-dark border border-gray-800 rounded-xl p-6 text-center">
+           <div className="mx-6 bg-offroad-dark border border-gray-800 rounded-xl p-6 text-center">
                <p className="text-gray-500 text-sm">Новостей пока нет 🤷‍♂️</p>
            </div>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide -mx-4 px-6 snap-x">
+          <div className="flex gap-3 overflow-x-auto pb-6 scrollbar-hide px-6 snap-x">
             {stories.map(story => (
-              <a href={story.link} key={story.id} target="_blank" className="snap-start flex-shrink-0 w-28 h-44 group relative rounded-2xl overflow-hidden bg-gray-900 shadow-lg active:scale-95 transition-transform border border-white/5">
+              <a href={story.link} key={story.id} target="_blank" className="snap-start flex-shrink-0 w-32 h-48 group relative rounded-2xl overflow-hidden bg-gray-900 shadow-lg active:scale-95 transition-transform border border-white/5">
                 <img 
                     src={story.image_url} 
-                    className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500" 
+                    className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-500" 
                     onError={(e) => e.currentTarget.style.display='none'}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
                 <div className="absolute bottom-3 left-3 right-3">
-                  <p className="text-white text-[10px] font-bold leading-tight line-clamp-3 drop-shadow-md">{story.title}</p>
+                  <p className="text-white text-[11px] font-bold leading-tight line-clamp-3 drop-shadow-md">{story.title}</p>
                 </div>
               </a>
             ))}
@@ -140,13 +147,8 @@ const HomePage = () => {
   );
 };
 
-// --- ОСТАЛЬНЫЕ КОМПОНЕНТЫ (EventsPage, NavPage, TabBar) ---
-// (Оставляем как были, но для целостности файла я их свернул. 
-// Если ты копируешь файл целиком - убедись, что они есть. 
-// Ниже я приведу ПОЛНЫЙ код App.tsx, чтобы ты просто скопировал и вставил)
-
 const EventsPage = () => {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -155,7 +157,7 @@ const EventsPage = () => {
   }, []);
 
   return (
-    <div className="p-6 pb-32 animate-in fade-in">
+    <div className="p-6 pb-32 animate-in fade-in max-w-md mx-auto w-full">
       <h1 className="text-3xl font-black text-white mb-6">Календарь</h1>
       {loading ? (
         <div className="flex justify-center mt-10 text-offroad-orange animate-spin"><Loader2 size={40} /></div>
@@ -199,7 +201,7 @@ const NavPage = () => {
   ];
 
   return (
-    <div className="p-6 pb-32 animate-in fade-in">
+    <div className="p-6 pb-32 animate-in fade-in max-w-md mx-auto w-full">
       <h1 className="text-3xl font-black text-white mb-6">База Знаний</h1>
       <div className="space-y-3">
         {topics.map((topic, index) => (
@@ -220,7 +222,7 @@ const TabBar = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-[#1a1a1a]/95 backdrop-blur-md border-t border-gray-800 pb-safe z-50">
-      <div className="flex justify-around items-center h-20 px-2">
+      <div className="flex justify-around items-center h-20 px-2 max-w-md mx-auto">
         <Link to="/" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/') ? 'text-offroad-orange' : 'text-gray-500'}`}>
           <Home size={24} strokeWidth={isActive('/') ? 2.5 : 2} />
           <span className="text-[10px] mt-1 font-medium">Главная</span>
@@ -255,7 +257,7 @@ function App() {
           <Route path="/admin" element={<Admin />} />
           <Route path="/profile" element={<Profile />} />
           
-          {/* ВОТ ЭТО ЛЕЧИТ ПУСТОЙ ЭКРАН */}
+          {/* Редирект для неизвестных страниц */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <TabBar />
