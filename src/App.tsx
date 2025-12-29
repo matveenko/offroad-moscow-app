@@ -3,6 +3,7 @@ import { Calendar, Map, Home, User, ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import EventDetails from './pages/EventDetails'; // Убедись, что файл существует
+import Admin from './pages/Admin';
 
 // Типы данных
 interface Event {
@@ -172,6 +173,7 @@ function App() {
           <Route path="/events" element={<EventsPage />} />
           <Route path="/event/:id" element={<EventDetails />} />
           <Route path="/nav" element={<NavPage />} />
+          <Route path="/admin" element={<Admin />} />
         </Routes>
         <TabBar />
       </div>
