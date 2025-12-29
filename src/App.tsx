@@ -2,20 +2,17 @@ import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-ro
 import { Calendar, Map, Home, User, ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
-import EventDetails from './pages/EventDetails'; // Убедись, что файл существует
-import Admin from './pages/Admin';
+import EventDetails from './pages/EventDetails';
+import Admin from './pages/Admin'; // <--- 1. ИМПОРТ АДМИНКИ
 
-// Типы данных
 interface Event {
   id: number;
   title: string;
   date: string;
   location: string;
   price: number;
-  image_url?: string; // <-- Добавили (вопросительный знак, т.к. может не быть)
+  image_url?: string;
 }
-
-// --- КОМПОНЕНТЫ ---
 
 const HomePage = () => (
   <div className="p-6 space-y-6 pb-24">
@@ -78,10 +75,8 @@ const EventsPage = () => {
           {events.map((event) => (
             <Link to={`/event/${event.id}`} key={event.id} className="block group">
               <div className="bg-offroad-dark border border-gray-800 rounded-xl overflow-hidden relative h-40">
-                {/* Картинка на фоне */}
                 <img src={event.image_url} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
-                
                 <div className="absolute bottom-0 left-0 p-4 w-full">
                   <div className="flex justify-between items-end">
                     <div>
@@ -108,7 +103,6 @@ const EventsPage = () => {
 };
 
 const NavPage = () => {
-  // Ссылки на канал (Замени на свои реальные!)
   const topics = [
     { title: 'Правила чата', link: 'https://t.me/offroad_moscow/1' },
     { title: 'Как подготовить авто', link: 'https://t.me/offroad_moscow/2' },
@@ -121,13 +115,7 @@ const NavPage = () => {
       <h1 className="text-3xl font-black text-white mb-6">База Знаний</h1>
       <div className="space-y-3">
         {topics.map((topic, index) => (
-          <a 
-            href={topic.link} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            key={index} 
-            className="block bg-offroad-dark border border-gray-800 p-5 rounded-xl flex justify-between items-center active:bg-gray-800 active:scale-[0.98] transition-all"
-          >
+          <a href={topic.link} target="_blank" rel="noopener noreferrer" key={index} className="block bg-offroad-dark border border-gray-800 p-5 rounded-xl flex justify-between items-center active:bg-gray-800 active:scale-[0.98] transition-all">
             <span className="font-bold text-gray-200">{topic.title}</span>
             <div className="bg-black/40 p-2 rounded-full">
                <ChevronRight size={16} className="text-offroad-orange"/>
@@ -141,7 +129,10 @@ const NavPage = () => {
 
 const TabBar = () => {
   const location = useLocation();
-  if (location.pathname.includes('/event/')) return null;
+  
+  // 2. СКРЫВАЕМ МЕНЮ В АДМИНКЕ И В ДЕТАЛЯХ ВЫЕЗДА
+  if (location.pathname.includes('/event/') || location.pathname === '/admin') return null;
+
   const isActive = (path: string) => location.pathname === path;
 
   return (
@@ -173,7 +164,7 @@ function App() {
           <Route path="/events" element={<EventsPage />} />
           <Route path="/event/:id" element={<EventDetails />} />
           <Route path="/nav" element={<NavPage />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin" element={<Admin />} /> {/* <--- 3. ВОТ ОНА, ДВЕРЬ В АДМИНКУ */}
         </Routes>
         <TabBar />
       </div>
