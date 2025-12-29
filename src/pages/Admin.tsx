@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Loader2, Trash2, Phone, Users, Baby, Plus, Edit, LogOut } from 'lucide-react';
+import { Loader2, Trash2, Phone, Plus, Edit, LogOut } from 'lucide-react';;
 import { useNavigate } from 'react-router-dom';
 import AdminForm from '../components/AdminForm';
 import { toast } from 'sonner';

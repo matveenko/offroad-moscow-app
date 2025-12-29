@@ -1,5 +1,5 @@
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Calendar, Map, Home, User, ChevronRight, Loader2, Plus, Edit, Trash2, X, Users, Baby, Phone, Image, LogOut } from 'lucide-react';
+import { Calendar, Map, Home, User, ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import EventDetails from './pages/EventDetails';
