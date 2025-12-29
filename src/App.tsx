@@ -63,14 +63,14 @@ const HomePage = () => {
         </div>
       </header>
 
-      {/* 2. ГЛАВНЫЙ БАННЕР (HERO SECTION) - ВОТ ТУТ МЫ МЕНЯЕМ ДИЗАЙН */}
-      <div className="relative w-full h-[400px] rounded-[32px] overflow-hidden shadow-2xl group isolate">
-        
-        {/* ФОНОВАЯ КАРТИНКА (Живая) */}
-        <img 
-            src="https://unsplash.com/photos/an-aerial-view-of-a-car-driving-through-a-forest--q0nv3kCyQ8=crop" 
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-            alt="Offroad"
+      <div className="absolute inset-0 bg-gray-800"> {/* Подложка, если картинка не прогрузится */}
+            <img 
+                src="https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1920&auto=format&fit=crop" 
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                alt="Offroad"
+                onError={(e) => {
+                    e.currentTarget.style.display = 'none'; // Если сломалась — скрываем, останется серый фон
+                }}
         />
         
         {/* Градиент, чтобы текст читался */}
