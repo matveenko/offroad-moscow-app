@@ -1,9 +1,10 @@
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Calendar, Map, Home, User, ChevronRight, Loader2 } from 'lucide-react';
+import { Calendar, Map, Home, User, ChevronRight, Loader2, Plus, Edit, Trash2, X, Users, Baby, Phone, Image, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import EventDetails from './pages/EventDetails';
-import Admin from './pages/Admin'; // <--- 1. ИМПОРТ АДМИНКИ
+import Admin from './pages/Admin';
+import { Toaster } from 'sonner'; // <-- Уведомления
 
 interface Event {
   id: number;
@@ -45,24 +46,12 @@ const EventsPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getEvents();
+    supabase.from('events').select('*').order('date', { ascending: true })
+      .then(({ data }) => {
+        setEvents(data || []);
+        setLoading(false);
+      });
   }, []);
-
-  async function getEvents() {
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('date', { ascending: true });
-
-      if (error) throw error;
-      if (data) setEvents(data);
-    } catch (error) {
-      console.error('Ошибка:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   return (
     <div className="p-6 pb-24">
@@ -75,7 +64,7 @@ const EventsPage = () => {
           {events.map((event) => (
             <Link to={`/event/${event.id}`} key={event.id} className="block group">
               <div className="bg-offroad-dark border border-gray-800 rounded-xl overflow-hidden relative h-40">
-                <img src={event.image_url} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" />
+                <img src={event.image_url} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" onError={(e) => e.currentTarget.style.display='none'}/>
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
                 <div className="absolute bottom-0 left-0 p-4 w-full">
                   <div className="flex justify-between items-end">
@@ -106,7 +95,6 @@ const NavPage = () => {
   const topics = [
     { title: 'Правила чата', link: 'https://t.me/offroad_moscow/1' },
     { title: 'Как подготовить авто', link: 'https://t.me/offroad_moscow/2' },
-    { title: 'Минимальный набор ZIP', link: 'https://t.me/offroad_moscow/3' },
     { title: 'Контакты админов', link: 'https://t.me/offroad_moscow/4' },
   ];
 
@@ -115,11 +103,9 @@ const NavPage = () => {
       <h1 className="text-3xl font-black text-white mb-6">База Знаний</h1>
       <div className="space-y-3">
         {topics.map((topic, index) => (
-          <a href={topic.link} target="_blank" rel="noopener noreferrer" key={index} className="block bg-offroad-dark border border-gray-800 p-5 rounded-xl flex justify-between items-center active:bg-gray-800 active:scale-[0.98] transition-all">
+          <a href={topic.link} target="_blank" rel="noopener noreferrer" key={index} className="block bg-offroad-dark border border-gray-800 p-5 rounded-xl flex justify-between items-center active:bg-gray-800">
             <span className="font-bold text-gray-200">{topic.title}</span>
-            <div className="bg-black/40 p-2 rounded-full">
-               <ChevronRight size={16} className="text-offroad-orange"/>
-            </div>
+            <ChevronRight size={16} className="text-offroad-orange"/>
           </a>
         ))}
       </div>
@@ -129,10 +115,7 @@ const NavPage = () => {
 
 const TabBar = () => {
   const location = useLocation();
-  
-  // 2. СКРЫВАЕМ МЕНЮ В АДМИНКЕ И В ДЕТАЛЯХ ВЫЕЗДА
   if (location.pathname.includes('/event/') || location.pathname === '/admin') return null;
-
   const isActive = (path: string) => location.pathname === path;
 
   return (
@@ -158,13 +141,14 @@ const TabBar = () => {
 function App() {
   return (
     <Router>
+      <Toaster position="top-center" richColors />
       <div className="min-h-screen bg-offroad-black text-white font-sans selection:bg-offroad-orange selection:text-white">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/event/:id" element={<EventDetails />} />
           <Route path="/nav" element={<NavPage />} />
-          <Route path="/admin" element={<Admin />} /> {/* <--- 3. ВОТ ОНА, ДВЕРЬ В АДМИНКУ */}
+          <Route path="/admin" element={<Admin />} />
         </Routes>
         <TabBar />
       </div>
