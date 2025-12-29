@@ -11,6 +11,7 @@ interface Event {
   date: string;
   location: string;
   price: number;
+  image_url?: string; // <-- Добавили (вопросительный знак, т.к. может не быть)
 }
 
 // --- КОМПОНЕНТЫ ---
@@ -59,7 +60,7 @@ const EventsPage = () => {
       if (error) throw error;
       if (data) setEvents(data);
     } catch (error) {
-      console.error('Ошибка загрузки:', error);
+      console.error('Ошибка:', error);
     } finally {
       setLoading(false);
     }
@@ -70,31 +71,30 @@ const EventsPage = () => {
       <h1 className="text-3xl font-black text-white mb-6">Календарь</h1>
       
       {loading ? (
-        <div className="flex justify-center mt-10 text-offroad-orange animate-spin">
-          <Loader2 size={40} />
-        </div>
-      ) : events.length === 0 ? (
-        <p className="text-gray-500">Пока тихо...</p>
+        <div className="flex justify-center mt-10 text-offroad-orange animate-spin"><Loader2 size={40} /></div>
       ) : (
         <div className="space-y-4">
           {events.map((event) => (
-            <Link to={`/event/${event.id}`} key={event.id} className="block">
-              <div className="bg-offroad-dark border border-gray-800 rounded-xl p-4 flex gap-4 hover:border-offroad-orange/50 transition-colors cursor-pointer">
-                <div className="flex-col flex items-center justify-center bg-gray-900 rounded-lg w-16 h-16 border border-gray-700 shrink-0">
-                  <span className="text-offroad-orange font-bold text-xl">
-                    {new Date(event.date).getDate()}
-                  </span>
-                  <span className="text-[10px] text-gray-500 uppercase">
-                    {new Date(event.date).toLocaleString('default', { month: 'short' })}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg leading-tight">{event.title}</h3>
-                  <div className="flex items-center mt-1 text-gray-400 text-xs">
-                     <Map size={12} className="mr-1" /> {event.location}
-                  </div>
-                  <div className="mt-2 inline-block bg-gray-800 px-2 py-0.5 rounded text-[10px] text-gray-300">
-                    {event.price} ₽
+            <Link to={`/event/${event.id}`} key={event.id} className="block group">
+              <div className="bg-offroad-dark border border-gray-800 rounded-xl overflow-hidden relative h-40">
+                {/* Картинка на фоне */}
+                <img src={event.image_url} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                
+                <div className="absolute bottom-0 left-0 p-4 w-full">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <span className="text-offroad-orange text-xs font-bold uppercase tracking-wider mb-1 block">
+                        {new Date(event.date).toLocaleDateString('ru-RU')}
+                      </span>
+                      <h3 className="font-bold text-xl leading-none text-white shadow-black drop-shadow-md">{event.title}</h3>
+                      <div className="flex items-center mt-2 text-gray-300 text-xs">
+                         <Map size={12} className="mr-1" /> {event.location}
+                      </div>
+                    </div>
+                    <div className="bg-offroad-orange px-2 py-1 rounded text-xs font-bold text-white">
+                      {event.price} ₽
+                    </div>
                   </div>
                 </div>
               </div>
@@ -140,6 +140,7 @@ const NavPage = () => {
 
 const TabBar = () => {
   const location = useLocation();
+  if (location.pathname.includes('/event/')) return null;
   const isActive = (path: string) => location.pathname === path;
 
   return (
