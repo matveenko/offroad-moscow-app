@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import WebApp from '@twa-dev/sdk';
-import { Loader2, Trophy, MapPin, Calendar, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, Trophy, Calendar, Clock, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 // Типы данных

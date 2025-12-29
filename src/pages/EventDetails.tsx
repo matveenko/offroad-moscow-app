@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import WebApp from '@twa-dev/sdk';
 import { ArrowLeft, MapPin, Calendar, Loader2, AlertTriangle, CheckCircle, CheckSquare, X, Users, Baby, Phone } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Event {
   id: number;
@@ -27,7 +28,7 @@ export default function EventDetails() {
   const [formData, setFormData] = useState({
     guests: 0,
     children: false,
-    phone: ''
+    phone: '' // Храним уже форматированный номер
   });
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export default function EventDetails() {
       if (error) console.error(error);
       else setEvent(eventData);
 
-      // Проверка регистрации
+      // Проверка регистрации (только если открыто в Телеге)
       if (WebApp.initDataUnsafe.user) {
         const userId = WebApp.initDataUnsafe.user.id.toString();
         const { data: regData } = await supabase
@@ -60,18 +61,46 @@ export default function EventDetails() {
     fetchEvent();
   }, [id]);
 
+  // --- ЛОГИКА МАСКИ ТЕЛЕФОНА ---
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/\D/g, ''); // Убираем всё кроме цифр
+    
+    // Если пользователь стирает всё
+    if (val.length === 0) {
+        setFormData({ ...formData, phone: '' });
+        return;
+    }
+
+    // Нормализация (если начал с 8 или 9)
+    if (val.startsWith('7')) val = val.slice(1);
+    else if (val.startsWith('8')) val = val.slice(1);
+    else if (val.startsWith('9')) val = val;
+
+    // Ограничиваем длину (10 цифр после +7)
+    val = val.slice(0, 10);
+
+    // Собираем маску: +7 (XXX) XXX-XX-XX
+    let formatted = '+7';
+    if (val.length > 0) formatted += ' (' + val.slice(0, 3);
+    if (val.length >= 3) formatted += ') ' + val.slice(3, 6);
+    if (val.length >= 6) formatted += '-' + val.slice(6, 8);
+    if (val.length >= 8) formatted += '-' + val.slice(8, 10);
+
+    setFormData({ ...formData, phone: formatted });
+  };
+
   const handleBooking = async () => {
     const user = WebApp.initDataUnsafe.user;
-    // Для тестов в браузере раскомментируй строку ниже:
-    // const user = { id: 12345, first_name: "Test", username: "tester" }; 
+    // const user = { id: 12345, first_name: "Test", username: "tester" }; // Раскомментить для тестов в браузере
 
     if (!user) {
-      alert("Запись доступна только через Telegram!");
+      toast.error("Запись доступна только через Telegram!");
       return;
     }
 
-    if (!formData.phone) {
-      WebApp.showAlert('Укажи телефон для связи!');
+    // Жесткая проверка длины номера (+7 (XXX) XXX-XX-XX — это 18 символов)
+    if (formData.phone.length < 18) {
+      toast.error('Введите корректный номер телефона!');
       return;
     }
 
@@ -85,17 +114,18 @@ export default function EventDetails() {
           user_id: user.id.toString(),
           first_name: user.first_name,
           username: user.username,
-          guests_count: formData.guests,   // <-- Новые данные
-          has_children: formData.children, // <-- Новые данные
-          phone: formData.phone            // <-- Новые данные
+          guests_count: formData.guests,
+          has_children: formData.children,
+          phone: formData.phone
         }
       ]);
 
     if (error) {
-      alert("Ошибка: " + error.message);
+      toast.error("Ошибка записи: " + error.message);
     } else {
       setIsRegistered(true);
       setShowModal(false);
+      toast.success('Записали! Готовь тачку.');
       WebApp.HapticFeedback.notificationOccurred('success');
     }
     setBookingLoading(false);
@@ -112,7 +142,7 @@ export default function EventDetails() {
         </button>
       </div>
 
-      {/* Картинка с заглушкой */}
+      {/* Картинка */}
       <div className="h-72 relative bg-gray-800">
         <img 
           src={event.image_url || "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=1000&q=80"} 
@@ -168,7 +198,7 @@ export default function EventDetails() {
           </button>
         ) : (
           <button 
-            onClick={() => setShowModal(true)} // Открываем модалку
+            onClick={() => setShowModal(true)}
             className="flex-1 bg-offroad-orange hover:bg-orange-600 text-white font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(249,115,22,0.4)] active:scale-95 transition-all"
           >
             Вписаться
@@ -188,15 +218,16 @@ export default function EventDetails() {
             <div className="space-y-4">
               {/* Телефон */}
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Твой телефон (для чата)</label>
-                <div className="flex items-center bg-black/50 border border-gray-700 rounded-xl px-3 py-3">
+                <label className="text-sm text-gray-400 mb-1 block">Твой телефон</label>
+                <div className="flex items-center bg-black/50 border border-gray-700 rounded-xl px-3 py-3 focus-within:border-offroad-orange transition-colors">
                   <Phone size={18} className="text-gray-500 mr-2"/>
                   <input 
                     type="tel" 
-                    placeholder="+7 999 000 00 00"
+                    placeholder="+7 (999) 000-00-00"
                     className="bg-transparent text-white w-full outline-none placeholder:text-gray-600"
                     value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    onChange={handlePhoneChange}
+                    maxLength={18}
                   />
                 </div>
               </div>
@@ -208,9 +239,30 @@ export default function EventDetails() {
                   <span className="text-sm">Еду не один (+пассажиры)</span>
                 </div>
                 <div className="flex items-center gap-3">
-                   <button onClick={() => setFormData(p => ({...p, guests: Math.max(0, p.guests - 1)}))} className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold">-</button>
-                   <span className="w-4 text-center">{formData.guests}</span>
-                   <button onClick={() => setFormData(p => ({...p, guests: p.guests + 1}))} className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold">+</button>
+                   {/* Кнопка МИНУС */}
+                   <button 
+                     onClick={() => setFormData(p => ({...p, guests: Math.max(0, p.guests - 1)}))} 
+                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold transition-colors ${formData.guests === 0 ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                     disabled={formData.guests === 0}
+                   >
+                     -
+                   </button>
+                   
+                   <span className="w-4 text-center font-bold">{formData.guests}</span>
+                   
+                   {/* Кнопка ПЛЮС (С ЛИМИТОМ И ТОСТОМ) */}
+                   <button 
+                     onClick={() => {
+                        if (formData.guests >= 4) {
+                            toast.warning('Эй, это джип, а не маршрутка! Максимум 4 взрослых.');
+                            return;
+                        }
+                        setFormData(p => ({...p, guests: p.guests + 1}));
+                     }} 
+                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold transition-colors ${formData.guests >= 4 ? 'bg-red-900/30 text-red-400 border border-red-900' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                   >
+                     +
+                   </button>
                 </div>
               </div>
 
