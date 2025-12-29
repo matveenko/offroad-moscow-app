@@ -5,6 +5,7 @@ import { supabase } from './supabaseClient';
 import EventDetails from './pages/EventDetails';
 import Admin from './pages/Admin';
 import { Toaster } from 'sonner'; // <-- Уведомления
+import Profile from './pages/Profile';
 
 interface Event {
   id: number;
@@ -133,6 +134,10 @@ const TabBar = () => {
           <Map size={24} strokeWidth={isActive('/nav') ? 2.5 : 2} />
           <span className="text-[10px] mt-1 font-medium">Инфо</span>
         </Link>
+        <Link to="/profile" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/profile') ? 'text-offroad-orange' : 'text-gray-500'}`}>
+  <User size={24} strokeWidth={isActive('/profile') ? 2.5 : 2} />
+  <span className="text-[10px] mt-1 font-medium">Я</span>
+</Link>
       </div>
     </nav>
   );
@@ -149,6 +154,7 @@ function App() {
           <Route path="/event/:id" element={<EventDetails />} />
           <Route path="/nav" element={<NavPage />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
         <TabBar />
       </div>
