@@ -1,31 +1,18 @@
 import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Calendar, Map, Home, User, ChevronRight, Loader2, CloudRain, PlayCircle } from 'lucide-react';
+import { Calendar, Map, Home, User, ChevronRight, Loader2, CloudRain, PlayCircle, X, ExternalLink, BookOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import WebApp from '@twa-dev/sdk';
 import { Toaster } from 'sonner';
 
-// Импорт страниц
 import EventDetails from './pages/EventDetails';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 
 // --- ТИПЫ ---
-interface Story {
-  id: number;
-  title: string;
-  image_url: string;
-  link: string;
-}
-
-interface Event {
-  id: number;
-  title: string;
-  date: string;
-  location: string;
-  price: number;
-  image_url?: string;
-}
+interface Story { id: number; title: string; image_url: string; link: string; }
+interface Event { id: number; title: string; date: string; location: string; price: number; image_url?: string; }
+interface WikiArticle { id: number; title: string; content: string; image_url?: string; telegram_link?: string; }
 
 // --- КОМПОНЕНТЫ ---
 
@@ -33,21 +20,27 @@ const HomePage = () => {
   const user = WebApp.initDataUnsafe.user;
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bannerUrl, setBannerUrl] = useState('https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1200&auto=format&fit=crop'); // Дефолт
 
   useEffect(() => {
-    const fetchStories = async () => {
-      const { data } = await supabase.from('stories').select('*').order('created_at', { ascending: false }).limit(5);
-      setStories(data || []);
-      setLoading(false);
+    const loadData = async () => {
+        // 1. Грузим новости
+        const { data: storiesData } = await supabase.from('stories').select('*').order('created_at', { ascending: false }).limit(5);
+        if (storiesData) setStories(storiesData);
+
+        // 2. Грузим баннер
+        const { data: settingsData } = await supabase.from('app_settings').select('value').eq('key', 'home_banner').single();
+        if (settingsData) setBannerUrl(settingsData.value);
+
+        setLoading(false);
     };
-    fetchStories();
+    loadData();
   }, []);
 
   return (
-    // max-w-5xl - это широко, но не бесконечно. На мобиле будет 100%.
     <div className="w-full max-w-5xl mx-auto space-y-8 pb-32 animate-in fade-in duration-500 pt-6">
       
-      {/* 1. Хедер */}
+      {/* Хедер */}
       <header className="flex justify-between items-center px-6">
         <div>
           <h1 className="text-3xl font-black text-white tracking-tighter">
@@ -57,7 +50,6 @@ const HomePage = () => {
           <p className="text-gray-500 text-sm font-medium">Готов месить?</p>
         </div>
         
-        {/* Виджет */}
         <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-3 shadow-lg">
           <CloudRain size={24} className="text-blue-400" />
           <div>
@@ -67,24 +59,20 @@ const HomePage = () => {
         </div>
       </header>
 
-      {/* 2. ГЛАВНЫЙ БАННЕР */}
+      {/* ГЛАВНЫЙ БАННЕР (ДИНАМИЧЕСКИЙ) */}
       <div className="px-4"> 
         <div className="relative w-full aspect-[4/5] sm:aspect-video md:h-[500px] rounded-[32px] overflow-hidden shadow-2xl group isolate bg-gray-800">
             
-            {/* Картинка: ДЖИП В ГРЯЗИ */}
             <img 
-                src="https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1200&auto=format&fit=crop" 
+                src={bannerUrl} 
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 alt="Offroad Jeep"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
             
-            {/* Градиент */}
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
 
-            {/* Контент */}
             <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-start z-10">
-                
                 <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full mb-4">
                     <div className="w-2 h-2 rounded-full bg-offroad-orange animate-pulse"></div>
                     <span className="text-white text-xs font-bold uppercase tracking-wider">Сезон Открыт</span>
@@ -95,10 +83,6 @@ const HomePage = () => {
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-offroad-orange to-red-500">ГРЯЗИ</span>
                 </h2>
                 
-                <p className="text-gray-200 text-base font-medium mb-8 max-w-md drop-shadow-md">
-                  Лес, колея и лебедка. Хватит сидеть в офисе, погнали топить тачки.
-                </p>
-
                 <Link to="/events" className="w-full sm:w-auto bg-offroad-orange text-white font-black uppercase tracking-wide py-4 px-8 rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(249,115,22,0.4)] active:scale-[0.98] transition-all hover:bg-orange-600 hover:shadow-[0_0_30px_rgba(249,115,22,0.6)]">
                    <span>Открыть Календарь</span>
                    <ChevronRight size={20} />
@@ -107,7 +91,7 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* 3. Лента новостей */}
+      {/* Лента новостей */}
       <div>
         <h3 className="text-xl font-bold text-white mb-4 px-6 flex items-center gap-2">
           <PlayCircle size={24} className="text-offroad-orange"/>
@@ -192,23 +176,57 @@ const EventsPage = () => {
 };
 
 const NavPage = () => {
-  const topics = [
-    { title: 'Правила чата', link: 'https://t.me/offroad_moscow/1' },
-    { title: 'Как подготовить авто', link: 'https://t.me/offroad_moscow/2' },
-    { title: 'Контакты админов', link: 'https://t.me/offroad_moscow/4' },
-  ];
+  const [articles, setArticles] = useState<WikiArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedArticle, setSelectedArticle] = useState<WikiArticle | null>(null);
+
+  useEffect(() => {
+    supabase.from('wiki').select('*').order('created_at', { ascending: false })
+      .then(({ data }) => { setArticles(data || []); setLoading(false); });
+  }, []);
 
   return (
     <div className="p-6 pb-32 animate-in fade-in w-full max-w-5xl mx-auto">
       <h1 className="text-3xl font-black text-white mb-6">База Знаний</h1>
-      <div className="space-y-3">
-        {topics.map((topic, index) => (
-          <a href={topic.link} target="_blank" rel="noopener noreferrer" key={index} className="block bg-offroad-dark border border-gray-800 p-5 rounded-xl flex justify-between items-center active:bg-gray-800 active:scale-[0.98] transition-all hover:border-gray-600">
-            <span className="font-bold text-gray-200 text-lg">{topic.title}</span>
-            <ChevronRight size={20} className="text-offroad-orange"/>
-          </a>
-        ))}
-      </div>
+      
+      {loading ? <Loader2 className="animate-spin mx-auto text-offroad-orange"/> : (
+         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {articles.map((art) => (
+              <div key={art.id} onClick={() => setSelectedArticle(art)} className="bg-offroad-dark border border-gray-800 p-5 rounded-2xl flex items-center justify-between active:bg-gray-800 active:scale-[0.98] transition-all cursor-pointer group hover:border-gray-600">
+                <div className="flex items-center gap-4">
+                    {art.image_url && <img src={art.image_url} className="w-12 h-12 rounded-lg object-cover bg-gray-800"/>}
+                    <span className="font-bold text-gray-200 text-lg leading-tight">{art.title}</span>
+                </div>
+                <ChevronRight size={20} className="text-offroad-orange group-hover:translate-x-1 transition-transform"/>
+              </div>
+            ))}
+            {articles.length === 0 && <p className="text-gray-500">Пока пусто. Админ ленится.</p>}
+         </div>
+      )}
+
+      {selectedArticle && (
+        <div className="fixed inset-0 z-[60] bg-offroad-black flex flex-col animate-in slide-in-from-bottom-10 duration-300">
+            <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-offroad-black/90 backdrop-blur">
+                <h2 className="font-bold text-lg truncate pr-4">{selectedArticle.title}</h2>
+                <button onClick={() => setSelectedArticle(null)} className="p-2 bg-gray-800 rounded-full hover:bg-gray-700"><X size={20}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 pb-20 max-w-5xl mx-auto w-full">
+                {selectedArticle.image_url && (
+                    <img src={selectedArticle.image_url} className="w-full h-64 sm:h-96 object-cover rounded-2xl mb-6 bg-gray-800"/>
+                )}
+                <div className="prose prose-invert max-w-none text-gray-300 whitespace-pre-wrap leading-7 font-normal">
+                    {selectedArticle.content}
+                </div>
+            </div>
+            {selectedArticle.telegram_link && (
+                <div className="p-4 border-t border-gray-800 bg-offroad-black pb-8">
+                    <a href={selectedArticle.telegram_link} target="_blank" className="flex items-center justify-center gap-2 w-full max-w-md mx-auto bg-[#2AABEE] text-white font-bold py-3 rounded-xl hover:bg-[#229ED9] transition-colors">
+                        <ExternalLink size={18}/> Читать / Обсудить в Telegram
+                    </a>
+                </div>
+            )}
+        </div>
+      )}
     </div>
   );
 };
@@ -221,22 +239,10 @@ const TabBar = () => {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-[#1a1a1a]/95 backdrop-blur-md border-t border-gray-800 pb-safe z-50">
       <div className="flex justify-around items-center h-20 px-2 w-full max-w-5xl mx-auto">
-        <Link to="/" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/') ? 'text-offroad-orange' : 'text-gray-500'}`}>
-          <Home size={24} strokeWidth={isActive('/') ? 2.5 : 2} />
-          <span className="text-[10px] mt-1 font-medium">Главная</span>
-        </Link>
-        <Link to="/events" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/events') ? 'text-offroad-orange' : 'text-gray-500'}`}>
-          <Calendar size={24} strokeWidth={isActive('/events') ? 2.5 : 2} />
-          <span className="text-[10px] mt-1 font-medium">Выезды</span>
-        </Link>
-        <Link to="/nav" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/nav') ? 'text-offroad-orange' : 'text-gray-500'}`}>
-          <Map size={24} strokeWidth={isActive('/nav') ? 2.5 : 2} />
-          <span className="text-[10px] mt-1 font-medium">Инфо</span>
-        </Link>
-        <Link to="/profile" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/profile') ? 'text-offroad-orange' : 'text-gray-500'}`}>
-          <User size={24} strokeWidth={isActive('/profile') ? 2.5 : 2} />
-          <span className="text-[10px] mt-1 font-medium">Я</span>
-        </Link>
+        <Link to="/" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/') ? 'text-offroad-orange' : 'text-gray-500'}`}><Home size={24} strokeWidth={isActive('/') ? 2.5 : 2} /><span className="text-[10px] mt-1 font-medium">Главная</span></Link>
+        <Link to="/events" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/events') ? 'text-offroad-orange' : 'text-gray-500'}`}><Calendar size={24} strokeWidth={isActive('/events') ? 2.5 : 2} /><span className="text-[10px] mt-1 font-medium">Выезды</span></Link>
+        <Link to="/nav" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/nav') ? 'text-offroad-orange' : 'text-gray-500'}`}><BookOpen size={24} strokeWidth={isActive('/nav') ? 2.5 : 2} /><span className="text-[10px] mt-1 font-medium">Wiki</span></Link>
+        <Link to="/profile" className={`flex flex-col items-center p-2 rounded-xl transition-all ${isActive('/profile') ? 'text-offroad-orange' : 'text-gray-500'}`}><User size={24} strokeWidth={isActive('/profile') ? 2.5 : 2} /><span className="text-[10px] mt-1 font-medium">Я</span></Link>
       </div>
     </nav>
   );
@@ -254,8 +260,6 @@ function App() {
           <Route path="/nav" element={<NavPage />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/profile" element={<Profile />} />
-          
-          {/* Редирект для неизвестных страниц */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <TabBar />
