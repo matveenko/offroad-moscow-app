@@ -20,7 +20,7 @@ interface Event {
   location: string; 
   price: number; 
   image_url?: string; 
-  is_archived?: boolean; // Флаг архива
+  is_archived?: boolean; 
 }
 interface WikiArticle { id: number; title: string; content: string; image_url?: string; telegram_link?: string; }
 
@@ -43,7 +43,11 @@ const HomePage = () => {
   const user = WebApp.initDataUnsafe.user;
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bannerUrl, setBannerUrl] = useState('https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1200');
+  
+  // Инициализируем null, чтобы не было скачка "Дефолт -> База"
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null); 
+  // Состояние: загрузилась ли сама картинка в браузере
+  const [isBannerImageLoaded, setIsBannerImageLoaded] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -51,9 +55,10 @@ const HomePage = () => {
         const { data: storiesData } = await supabase.from('stories').select('*').order('created_at', { ascending: false }).limit(5);
         if (storiesData) setStories(storiesData);
 
-        // 2. Грузим баннер из настроек
+        // 2. Грузим ссылку на баннер
         const { data: settingsData } = await supabase.from('app_settings').select('value').eq('key', 'home_banner').single();
-        if (settingsData) setBannerUrl(settingsData.value);
+        // Если в базе пусто, ставим дефолт, иначе из базы
+        setBannerUrl(settingsData?.value || 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1200');
 
         setLoading(false);
     };
@@ -82,20 +87,29 @@ const HomePage = () => {
         </div>
       </header>
 
-      {/* ГЛАВНЫЙ БАННЕР */}
+      {/* ГЛАВНЫЙ БАННЕР (С ПЛАВНОЙ ЗАГРУЗКОЙ) */}
       <div className="px-4"> 
         <div className="relative w-full aspect-[4/5] sm:aspect-video md:h-[500px] rounded-[32px] overflow-hidden shadow-2xl group isolate bg-gray-800">
             
-            <img 
-                src={getOptimizedUrl(bannerUrl, 1200)} 
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                alt="Offroad Jeep"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-            
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+            {/* 1. Скелетон (показывается, пока картинка не прогрузится) */}
+            {!isBannerImageLoaded && (
+                <div className="absolute inset-0 bg-gray-700 animate-pulse z-10" />
+            )}
 
-            <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-start z-10">
+            {/* 2. Картинка (скрыта opacity-0, пока не сработает onLoad) */}
+            {bannerUrl && (
+                <img 
+                    src={getOptimizedUrl(bannerUrl, 1200)} 
+                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 transform group-hover:scale-105 ${isBannerImageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
+                    alt="Offroad Jeep"
+                    onLoad={() => setIsBannerImageLoaded(true)}
+                    onError={(e) => { e.currentTarget.style.display = 'none'; setIsBannerImageLoaded(true); }} // Если ошибка, убираем скелетон
+                />
+            )}
+            
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20 pointer-events-none"></div>
+
+            <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-start z-30">
                 <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full mb-4">
                     <div className="w-2 h-2 rounded-full bg-offroad-orange animate-pulse"></div>
                     <span className="text-white text-xs font-bold uppercase tracking-wider">Сезон Открыт</span>
@@ -162,7 +176,6 @@ const EventsPage = () => {
       .then(({ data }) => { setEvents(data || []); setLoading(false); });
   }, []);
 
-  // Фильтрация по галочке is_archived
   const activeEvents = events.filter(e => !e.is_archived);
   const archivedEvents = events.filter(e => e.is_archived);
 
@@ -174,7 +187,6 @@ const EventsPage = () => {
         <div className="flex justify-center mt-10 text-offroad-orange animate-spin"><Loader2 size={40} /></div>
       ) : (
         <>
-          {/* АКТИВНЫЕ ВЫЕЗДЫ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {activeEvents.length === 0 && <p className="text-gray-500 col-span-full">Нет активных выездов.</p>}
             
@@ -198,7 +210,6 @@ const EventsPage = () => {
             ))}
           </div>
 
-          {/* АРХИВ (СПОЙЛЕР) */}
           {archivedEvents.length > 0 && (
             <div className="mt-12 border-t border-gray-800 pt-6">
                 <button 
