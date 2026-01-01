@@ -5,4 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/offroad-moscow-app/',
+  build: {
+    chunkSizeWarningLimit: 1600, // Подняли лимит до 1.6мб, чтобы не ныл
+  },
 })

@@ -140,33 +140,49 @@ const EventsPage = () => {
 
   return (
     <div className="p-6 pb-32 animate-in fade-in w-full max-w-5xl mx-auto">
-      <h1 className="text-3xl font-black text-white mb-6">Календарь</h1>
+      <h1 className="text-3xl font-display font-black text-white mb-6 uppercase tracking-wide">Календарь</h1>
+      
       {loading ? (
         <div className="flex justify-center mt-10 text-offroad-orange animate-spin"><Loader2 size={40} /></div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {events.map((event) => (
             <Link to={`/event/${event.id}`} key={event.id} className="block group">
-              <div className="bg-offroad-dark border border-gray-800 rounded-xl overflow-hidden relative h-48 shadow-lg transition-transform hover:-translate-y-1">
+              <div className="bg-offroad-dark border border-gray-800 rounded-2xl overflow-hidden relative h-52 shadow-lg transition-transform hover:-translate-y-1">
+                {/* Картинка */}
                 <img 
                     src={getOptimizedUrl(event.image_url, 600)} 
-                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-50 transition-opacity" 
+                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-60 transition-opacity" 
+                    onError={(e) => e.currentTarget.style.display='none'}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                
+                {/* Градиент */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+                
+                {/* Контент */}
                 <div className="absolute bottom-0 left-0 p-5 w-full">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <span className="text-offroad-orange text-xs font-bold uppercase tracking-wider mb-1 block shadow-black drop-shadow-md">
+                  {/* flex-row чтобы они стояли в ряд, items-end чтобы ровнялись по низу */}
+                  <div className="flex justify-between items-end gap-4">
+                    
+                    {/* ЛЕВАЯ ЧАСТЬ (Текст): flex-1 и min-w-0 не дают тексту ломать верстку */}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-offroad-orange text-xs font-bold uppercase tracking-wider mb-1 block shadow-black drop-shadow-md font-sans">
                         {new Date(event.date).toLocaleDateString('ru-RU')}
                       </span>
-                      <h3 className="font-bold text-2xl leading-none text-white shadow-black drop-shadow-md">{event.title}</h3>
-                      <div className="flex items-center mt-2 text-gray-300 text-sm shadow-black drop-shadow-md">
-                         <Map size={14} className="mr-1" /> {event.location}
+                      <h3 className="font-display font-bold text-xl leading-tight text-white shadow-black drop-shadow-md uppercase break-words">
+                        {event.title}
+                      </h3>
+                      <div className="flex items-center mt-2 text-gray-300 text-xs shadow-black drop-shadow-md font-sans truncate">
+                         <Map size={12} className="mr-1 shrink-0" /> 
+                         <span className="truncate">{event.location}</span>
                       </div>
                     </div>
-                    <div className="bg-offroad-orange/90 backdrop-blur px-3 py-1.5 rounded-lg text-sm font-bold text-white shadow-lg">
+
+                    {/* ПРАВАЯ ЧАСТЬ (Цена): shrink-0 запрещает сжимать кнопку */}
+                    <div className="shrink-0 bg-offroad-orange px-3 py-2 rounded-xl text-sm font-display font-bold text-white shadow-lg flex items-center justify-center min-w-[70px]">
                       {event.price} ₽
                     </div>
+
                   </div>
                 </div>
               </div>
