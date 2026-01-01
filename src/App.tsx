@@ -1,27 +1,40 @@
-import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Calendar, Map, Home, User, ChevronRight, Loader2, CloudRain, PlayCircle, X, ExternalLink, BookOpen } from 'lucide-react';
+import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { Calendar, Map, Home, User, ChevronRight, Loader2, CloudRain, PlayCircle, X, ExternalLink, BookOpen, Archive } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import WebApp from '@twa-dev/sdk';
 import { Toaster } from 'sonner';
+import { getOptimizedUrl } from './utils';
 
+// Импорт страниц
 import EventDetails from './pages/EventDetails';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 
 // --- ТИПЫ ---
 interface Story { id: number; title: string; image_url: string; link: string; }
-interface Event { id: number; title: string; date: string; location: string; price: number; image_url?: string; }
+interface Event { 
+  id: number; 
+  title: string; 
+  date: string; 
+  location: string; 
+  price: number; 
+  image_url?: string; 
+  is_archived?: boolean; // Флаг архива
+}
 interface WikiArticle { id: number; title: string; content: string; image_url?: string; telegram_link?: string; }
 
-// --- ХЕЛПЕР ДЛЯ КАРТИНОК (ЛЕЧИТ БАГИ В ТЕЛЕГЕ) ---
-const getOptimizedUrl = (url?: string | null, width = 800) => {
-  if (!url) return '';
-  // Если это уже прокси или локальная картинка - не трогаем
-  if (url.includes('wsrv.nl')) return url;
-  
-  // Пропускаем через прокси: сжимаем, конвертируем в WebP и лечим CORS
-  return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${width}&q=80&output=webp`;
+// --- КОМПОНЕНТ-ЛОВУШКА ДЛЯ DEEP LINKS ---
+const DeepLinkHandler = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const param = WebApp.initDataUnsafe.start_param;
+    if (param && param.startsWith('event_')) {
+      const eventId = param.split('_')[1];
+      navigate(`/event/${eventId}`);
+    }
+  }, [navigate]);
+  return null;
 };
 
 // --- КОМПОНЕНТЫ ---
@@ -34,9 +47,11 @@ const HomePage = () => {
 
   useEffect(() => {
     const loadData = async () => {
+        // 1. Грузим новости
         const { data: storiesData } = await supabase.from('stories').select('*').order('created_at', { ascending: false }).limit(5);
         if (storiesData) setStories(storiesData);
 
+        // 2. Грузим баннер из настроек
         const { data: settingsData } = await supabase.from('app_settings').select('value').eq('key', 'home_banner').single();
         if (settingsData) setBannerUrl(settingsData.value);
 
@@ -57,6 +72,7 @@ const HomePage = () => {
           </h1>
           <p className="text-gray-500 text-sm font-medium">Готов месить?</p>
         </div>
+        
         <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-3 shadow-lg">
           <CloudRain size={24} className="text-blue-400" />
           <div>
@@ -69,21 +85,27 @@ const HomePage = () => {
       {/* ГЛАВНЫЙ БАННЕР */}
       <div className="px-4"> 
         <div className="relative w-full aspect-[4/5] sm:aspect-video md:h-[500px] rounded-[32px] overflow-hidden shadow-2xl group isolate bg-gray-800">
+            
             <img 
                 src={getOptimizedUrl(bannerUrl, 1200)} 
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 alt="Offroad Jeep"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
+            
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+
             <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-start z-10">
                 <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full mb-4">
                     <div className="w-2 h-2 rounded-full bg-offroad-orange animate-pulse"></div>
                     <span className="text-white text-xs font-bold uppercase tracking-wider">Сезон Открыт</span>
                 </div>
+
                 <h2 className="text-5xl sm:text-6xl font-black text-white leading-[0.9] mb-4 drop-shadow-xl">
                   ВРЕМЯ<br/>
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-offroad-orange to-red-500">ГРЯЗИ</span>
                 </h2>
+                
                 <Link to="/events" className="w-full sm:w-auto bg-offroad-orange text-white font-black uppercase tracking-wide py-4 px-8 rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(249,115,22,0.4)] active:scale-[0.98] transition-all hover:bg-orange-600 hover:shadow-[0_0_30px_rgba(249,115,22,0.6)]">
                    <span>Открыть Календарь</span>
                    <ChevronRight size={20} />
@@ -114,6 +136,7 @@ const HomePage = () => {
                 <img 
                     src={getOptimizedUrl(story.image_url, 400)} 
                     className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-500" 
+                    onError={(e) => e.currentTarget.style.display='none'}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
                 <div className="absolute bottom-3 left-3 right-3">
@@ -132,11 +155,16 @@ const HomePage = () => {
 const EventsPage = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showArchive, setShowArchive] = useState(false);
 
   useEffect(() => {
     supabase.from('events').select('*').order('date', { ascending: true })
       .then(({ data }) => { setEvents(data || []); setLoading(false); });
   }, []);
+
+  // Фильтрация по галочке is_archived
+  const activeEvents = events.filter(e => !e.is_archived);
+  const archivedEvents = events.filter(e => e.is_archived);
 
   return (
     <div className="p-6 pb-32 animate-in fade-in w-full max-w-5xl mx-auto">
@@ -145,50 +173,60 @@ const EventsPage = () => {
       {loading ? (
         <div className="flex justify-center mt-10 text-offroad-orange animate-spin"><Loader2 size={40} /></div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {events.map((event) => (
-            <Link to={`/event/${event.id}`} key={event.id} className="block group">
-              <div className="bg-offroad-dark border border-gray-800 rounded-2xl overflow-hidden relative h-52 shadow-lg transition-transform hover:-translate-y-1">
-                {/* Картинка */}
-                <img 
-                    src={getOptimizedUrl(event.image_url, 600)} 
-                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-60 transition-opacity" 
-                    onError={(e) => e.currentTarget.style.display='none'}
-                />
-                
-                {/* Градиент */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
-                
-                {/* Контент */}
-                <div className="absolute bottom-0 left-0 p-5 w-full">
-                  {/* flex-row чтобы они стояли в ряд, items-end чтобы ровнялись по низу */}
-                  <div className="flex justify-between items-end gap-4">
-                    
-                    {/* ЛЕВАЯ ЧАСТЬ (Текст): flex-1 и min-w-0 не дают тексту ломать верстку */}
-                    <div className="flex-1 min-w-0">
-                      <span className="text-offroad-orange text-xs font-bold uppercase tracking-wider mb-1 block shadow-black drop-shadow-md font-sans">
-                        {new Date(event.date).toLocaleDateString('ru-RU')}
-                      </span>
-                      <h3 className="font-display font-bold text-xl leading-tight text-white shadow-black drop-shadow-md uppercase break-words">
-                        {event.title}
-                      </h3>
-                      <div className="flex items-center mt-2 text-gray-300 text-xs shadow-black drop-shadow-md font-sans truncate">
-                         <Map size={12} className="mr-1 shrink-0" /> 
-                         <span className="truncate">{event.location}</span>
+        <>
+          {/* АКТИВНЫЕ ВЫЕЗДЫ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {activeEvents.length === 0 && <p className="text-gray-500 col-span-full">Нет активных выездов.</p>}
+            
+            {activeEvents.map((event) => (
+              <Link to={`/event/${event.id}`} key={event.id} className="block group">
+                <div className="bg-offroad-dark border border-gray-800 rounded-2xl overflow-hidden relative h-52 shadow-lg transition-transform hover:-translate-y-1">
+                  <img src={getOptimizedUrl(event.image_url, 600)} className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-60 transition-opacity" onError={(e) => e.currentTarget.style.display='none'}/>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+                  <div className="absolute bottom-0 left-0 p-5 w-full">
+                    <div className="flex justify-between items-end gap-4">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-offroad-orange text-xs font-bold uppercase tracking-wider mb-1 block shadow-black drop-shadow-md font-sans">{new Date(event.date).toLocaleDateString('ru-RU')}</span>
+                        <h3 className="font-display font-bold text-xl leading-tight text-white shadow-black drop-shadow-md uppercase break-words">{event.title}</h3>
+                        <div className="flex items-center mt-2 text-gray-300 text-xs shadow-black drop-shadow-md font-sans truncate"><Map size={12} className="mr-1 shrink-0" /><span className="truncate">{event.location}</span></div>
                       </div>
+                      <div className="shrink-0 bg-offroad-orange px-3 py-2 rounded-xl text-sm font-display font-bold text-white shadow-lg flex items-center justify-center min-w-[70px]">{event.price} ₽</div>
                     </div>
-
-                    {/* ПРАВАЯ ЧАСТЬ (Цена): shrink-0 запрещает сжимать кнопку */}
-                    <div className="shrink-0 bg-offroad-orange px-3 py-2 rounded-xl text-sm font-display font-bold text-white shadow-lg flex items-center justify-center min-w-[70px]">
-                      {event.price} ₽
-                    </div>
-
                   </div>
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* АРХИВ (СПОЙЛЕР) */}
+          {archivedEvents.length > 0 && (
+            <div className="mt-12 border-t border-gray-800 pt-6">
+                <button 
+                    onClick={() => setShowArchive(!showArchive)}
+                    className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors uppercase font-bold text-sm tracking-widest mb-4 w-full"
+                >
+                    <Archive size={18}/> {showArchive ? 'Скрыть архив' : 'Архив выездов'} ({archivedEvents.length})
+                </button>
+
+                {showArchive && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-top-2 fade-in">
+                        {archivedEvents.map((event) => (
+                        <Link to={`/event/${event.id}`} key={event.id} className="block group opacity-70 hover:opacity-100 transition-opacity">
+                            <div className="bg-black/40 border border-gray-800 rounded-2xl overflow-hidden relative h-40 shadow-sm grayscale hover:grayscale-0 transition-all">
+                                <img src={getOptimizedUrl(event.image_url, 400)} className="absolute inset-0 w-full h-full object-cover opacity-40" onError={(e) => e.currentTarget.style.display='none'}/>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                                <div className="absolute bottom-0 left-0 p-4 w-full">
+                                    <span className="text-gray-400 text-[10px] font-bold uppercase block mb-1">{new Date(event.date).toLocaleDateString('ru-RU')}</span>
+                                    <h3 className="font-bold text-lg leading-tight text-gray-200 uppercase">{event.title}</h3>
+                                </div>
+                            </div>
+                        </Link>
+                        ))}
+                    </div>
+                )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -271,6 +309,7 @@ function App() {
   return (
     <Router>
       <Toaster position="top-center" richColors theme="dark" />
+      <DeepLinkHandler />
       <div className="min-h-screen bg-offroad-black text-white font-sans selection:bg-offroad-orange selection:text-white">
         <Routes>
           <Route path="/" element={<HomePage />} />
