@@ -16,7 +16,8 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        sans: ['Montserrat', 'sans-serif'], // Основной текст
+        display: ['"Russo One"', 'sans-serif'], // Заголовки (Offroad Style)
       }
     },
   },

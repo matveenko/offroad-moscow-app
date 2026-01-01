@@ -14,21 +14,29 @@ interface Story { id: number; title: string; image_url: string; link: string; }
 interface Event { id: number; title: string; date: string; location: string; price: number; image_url?: string; }
 interface WikiArticle { id: number; title: string; content: string; image_url?: string; telegram_link?: string; }
 
+// --- ХЕЛПЕР ДЛЯ КАРТИНОК (ЛЕЧИТ БАГИ В ТЕЛЕГЕ) ---
+const getOptimizedUrl = (url?: string | null, width = 800) => {
+  if (!url) return '';
+  // Если это уже прокси или локальная картинка - не трогаем
+  if (url.includes('wsrv.nl')) return url;
+  
+  // Пропускаем через прокси: сжимаем, конвертируем в WebP и лечим CORS
+  return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${width}&q=80&output=webp`;
+};
+
 // --- КОМПОНЕНТЫ ---
 
 const HomePage = () => {
   const user = WebApp.initDataUnsafe.user;
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bannerUrl, setBannerUrl] = useState('https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1200&auto=format&fit=crop'); // Дефолт
+  const [bannerUrl, setBannerUrl] = useState('https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1200');
 
   useEffect(() => {
     const loadData = async () => {
-        // 1. Грузим новости
         const { data: storiesData } = await supabase.from('stories').select('*').order('created_at', { ascending: false }).limit(5);
         if (storiesData) setStories(storiesData);
 
-        // 2. Грузим баннер
         const { data: settingsData } = await supabase.from('app_settings').select('value').eq('key', 'home_banner').single();
         if (settingsData) setBannerUrl(settingsData.value);
 
@@ -49,7 +57,6 @@ const HomePage = () => {
           </h1>
           <p className="text-gray-500 text-sm font-medium">Готов месить?</p>
         </div>
-        
         <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-3 shadow-lg">
           <CloudRain size={24} className="text-blue-400" />
           <div>
@@ -59,30 +66,24 @@ const HomePage = () => {
         </div>
       </header>
 
-      {/* ГЛАВНЫЙ БАННЕР (ДИНАМИЧЕСКИЙ) */}
+      {/* ГЛАВНЫЙ БАННЕР */}
       <div className="px-4"> 
         <div className="relative w-full aspect-[4/5] sm:aspect-video md:h-[500px] rounded-[32px] overflow-hidden shadow-2xl group isolate bg-gray-800">
-            
             <img 
-                src={bannerUrl} 
+                src={getOptimizedUrl(bannerUrl, 1200)} 
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 alt="Offroad Jeep"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
-            
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
-
             <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-start z-10">
                 <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full mb-4">
                     <div className="w-2 h-2 rounded-full bg-offroad-orange animate-pulse"></div>
                     <span className="text-white text-xs font-bold uppercase tracking-wider">Сезон Открыт</span>
                 </div>
-
                 <h2 className="text-5xl sm:text-6xl font-black text-white leading-[0.9] mb-4 drop-shadow-xl">
                   ВРЕМЯ<br/>
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-offroad-orange to-red-500">ГРЯЗИ</span>
                 </h2>
-                
                 <Link to="/events" className="w-full sm:w-auto bg-offroad-orange text-white font-black uppercase tracking-wide py-4 px-8 rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(249,115,22,0.4)] active:scale-[0.98] transition-all hover:bg-orange-600 hover:shadow-[0_0_30px_rgba(249,115,22,0.6)]">
                    <span>Открыть Календарь</span>
                    <ChevronRight size={20} />
@@ -111,9 +112,8 @@ const HomePage = () => {
             {stories.map(story => (
               <a href={story.link} key={story.id} target="_blank" className="snap-start flex-shrink-0 w-36 h-52 group relative rounded-2xl overflow-hidden bg-gray-900 shadow-lg active:scale-95 transition-transform border border-white/5">
                 <img 
-                    src={story.image_url} 
+                    src={getOptimizedUrl(story.image_url, 400)} 
                     className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-500" 
-                    onError={(e) => e.currentTarget.style.display='none'}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
                 <div className="absolute bottom-3 left-3 right-3">
@@ -148,7 +148,10 @@ const EventsPage = () => {
           {events.map((event) => (
             <Link to={`/event/${event.id}`} key={event.id} className="block group">
               <div className="bg-offroad-dark border border-gray-800 rounded-xl overflow-hidden relative h-48 shadow-lg transition-transform hover:-translate-y-1">
-                <img src={event.image_url} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-50 transition-opacity" onError={(e) => e.currentTarget.style.display='none'}/>
+                <img 
+                    src={getOptimizedUrl(event.image_url, 600)} 
+                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-50 transition-opacity" 
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
                 <div className="absolute bottom-0 left-0 p-5 w-full">
                   <div className="flex justify-between items-end">
@@ -194,7 +197,7 @@ const NavPage = () => {
             {articles.map((art) => (
               <div key={art.id} onClick={() => setSelectedArticle(art)} className="bg-offroad-dark border border-gray-800 p-5 rounded-2xl flex items-center justify-between active:bg-gray-800 active:scale-[0.98] transition-all cursor-pointer group hover:border-gray-600">
                 <div className="flex items-center gap-4">
-                    {art.image_url && <img src={art.image_url} className="w-12 h-12 rounded-lg object-cover bg-gray-800"/>}
+                    {art.image_url && <img src={getOptimizedUrl(art.image_url, 100)} className="w-12 h-12 rounded-lg object-cover bg-gray-800"/>}
                     <span className="font-bold text-gray-200 text-lg leading-tight">{art.title}</span>
                 </div>
                 <ChevronRight size={20} className="text-offroad-orange group-hover:translate-x-1 transition-transform"/>
@@ -212,7 +215,7 @@ const NavPage = () => {
             </div>
             <div className="flex-1 overflow-y-auto p-5 pb-20 max-w-5xl mx-auto w-full">
                 {selectedArticle.image_url && (
-                    <img src={selectedArticle.image_url} className="w-full h-64 sm:h-96 object-cover rounded-2xl mb-6 bg-gray-800"/>
+                    <img src={getOptimizedUrl(selectedArticle.image_url, 800)} className="w-full h-64 sm:h-96 object-cover rounded-2xl mb-6 bg-gray-800"/>
                 )}
                 <div className="prose prose-invert max-w-none text-gray-300 whitespace-pre-wrap leading-7 font-normal">
                     {selectedArticle.content}
