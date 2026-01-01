@@ -256,8 +256,8 @@ export default function EventDetails() {
                     )}
                 </div>
                 <div className="text-sm text-gray-300 font-medium">
-                    <span className="text-white font-bold">{participants.length}</span> {participants.length === 1 ? 'человек' : 'человек'} уже едут!
-                </div>
+    <span className="text-white font-bold">{participants.length}</span> {participants.length === 1 ? 'человек уже едет!' : 'чел. уже едут!'}
+            </div>
             </div>
         )}
 
