@@ -16,7 +16,9 @@ import {
   Phone, 
   Share2, 
   Navigation, 
-  ExternalLink 
+  ExternalLink,
+  Car as CarIcon, // Добавил иконку
+  Anchor // Иконка для лебедки
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getOptimizedUrl } from '../utils';
@@ -41,13 +43,23 @@ interface Participant {
   avatar_url?: string;
 }
 
+// Интерфейс машины из твоей таблицы garage
+interface GarageCar {
+  id: number;
+  model: string;
+  tires?: string;
+  has_winch: boolean;
+  description?: string;
+}
+
 export default function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   
   // Данные
   const [event, setEvent] = useState<Event | null>(null);
-  const [participants, setParticipants] = useState<Participant[]>([]); // <-- СПИСОК ЛЮДЕЙ
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [userCars, setUserCars] = useState<GarageCar[]>([]); // <-- СПИСОК МАШИН
   
   // Состояния
   const [loading, setLoading] = useState(true);
@@ -55,6 +67,9 @@ export default function EventDetails() {
   const [showModal, setShowModal] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   
+  // Выбранная машина
+  const [selectedCarId, setSelectedCarId] = useState<number | null>(null);
+
   const [formData, setFormData] = useState({
     guests: 0,
     children: false,
@@ -64,6 +79,8 @@ export default function EventDetails() {
   useEffect(() => {
     async function fetchData() {
       if (!id) return;
+      
+      const user = WebApp.initDataUnsafe.user;
       
       // 1. Грузим событие
       const { data: eventData, error } = await supabase
@@ -83,9 +100,10 @@ export default function EventDetails() {
       
       if (partData) setParticipants(partData);
 
-      // 3. Проверяем регистрацию текущего юзера
-      if (WebApp.initDataUnsafe.user) {
-        const userId = WebApp.initDataUnsafe.user.id.toString();
+      if (user) {
+        const userId = user.id.toString();
+
+        // 3. Проверяем регистрацию текущего юзера
         const { data: regData } = await supabase
           .from('registrations')
           .select('*')
@@ -94,6 +112,20 @@ export default function EventDetails() {
           .single();
         
         if (regData) setIsRegistered(true);
+
+        // 4. ГРУЗИМ ГАРАЖ ЮЗЕРА
+        const { data: garageData } = await supabase
+          .from('garage')
+          .select('*')
+          .eq('user_id', userId); // Используем text ID как в схеме
+
+        if (garageData) {
+          setUserCars(garageData);
+          // Если машина одна - выбираем сразу
+          if (garageData.length === 1) {
+            setSelectedCarId(garageData[0].id);
+          }
+        }
       }
       setLoading(false);
     }
@@ -130,7 +162,27 @@ export default function EventDetails() {
       return;
     }
 
+    // Проверка выбора машины (если гараж не пустой)
+    if (userCars.length > 0 && !selectedCarId) {
+      toast.error('Выбери машину, на которой поедешь!');
+      return;
+    }
+
     setBookingLoading(true);
+
+    // Формируем строку информации о машине
+    let carInfoString = "Пешеход / Пассажир";
+    
+    if (selectedCarId) {
+      const car = userCars.find(c => c.id === selectedCarId);
+      if (car) {
+        // Пример: Jeep Wrangler, 35", Лебедка
+        const parts = [car.model];
+        if (car.tires) parts.push(`${car.tires}"`);
+        if (car.has_winch) parts.push('Лебедка');
+        carInfoString = parts.join(', ');
+      }
+    }
 
     const { error } = await supabase
       .from('registrations')
@@ -143,7 +195,8 @@ export default function EventDetails() {
           guests_count: formData.guests,
           has_children: formData.children,
           phone: formData.phone,
-          avatar_url: user.photo_url // Сохраняем аватарку
+          avatar_url: user.photo_url,
+          car_info: carInfoString // <-- Сохраняем инфо о машине
         }
       ]);
 
@@ -155,10 +208,8 @@ export default function EventDetails() {
       toast.success('Ура! Ты в команде!');
       WebApp.HapticFeedback.notificationOccurred('success');
       
-      // Добавляем себя в список участников визуально
       setParticipants(prev => [...prev, { id: Date.now(), first_name: user.first_name, avatar_url: user.photo_url }]);
 
-      // Салют
       confetti({
         particleCount: 150,
         spread: 80,
@@ -234,7 +285,7 @@ export default function EventDetails() {
           </button>
         </div>
 
-        {/* БЛОК УЧАСТНИКОВ (ВОТ ОН, РОДНОЙ!) */}
+        {/* БЛОК УЧАСТНИКОВ */}
         {participants.length > 0 && (
             <div className="mb-8 flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5 backdrop-blur-sm shadow-lg">
                 <div className="flex -space-x-3">
@@ -315,13 +366,52 @@ export default function EventDetails() {
       {/* МОДАЛКА */}
       {showModal && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-offroad-dark w-full max-w-md rounded-2xl border border-gray-700 p-6 animate-in slide-in-from-bottom-10 fade-in duration-300">
+          <div className="bg-offroad-dark w-full max-w-md rounded-2xl border border-gray-700 p-6 animate-in slide-in-from-bottom-10 fade-in duration-300 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-display font-bold text-white uppercase">Регистрация</h2>
                 <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white"><X size={24}/></button>
             </div>
 
             <div className="space-y-5 font-sans">
+              
+              {/* --- ВЫБОР МАШИНЫ --- */}
+              {userCars.length > 0 ? (
+                <div>
+                   <label className="text-sm text-gray-400 mb-2 block font-medium">Твоя тачка</label>
+                   <div className="space-y-2">
+                      {userCars.map(car => (
+                        <div 
+                           key={car.id} 
+                           onClick={() => setSelectedCarId(car.id)}
+                           className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${selectedCarId === car.id ? 'bg-offroad-orange/10 border-offroad-orange' : 'bg-black/50 border-gray-700 hover:bg-gray-800'}`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <CarIcon className={selectedCarId === car.id ? 'text-offroad-orange' : 'text-gray-500'} size={20}/>
+                                <div>
+                                    <div className="font-bold text-white text-sm">{car.model}</div>
+                                    <div className="text-xs text-gray-400 flex gap-2 items-center">
+                                       {car.tires && <span>{car.tires}"</span>}
+                                       {car.has_winch && <span className="flex items-center gap-1"><Anchor size={10} /> Лебедка</span>}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selectedCarId === car.id ? 'border-offroad-orange' : 'border-gray-600'}`}>
+                                {selectedCarId === car.id && <div className="w-2.5 h-2.5 rounded-full bg-offroad-orange" />}
+                            </div>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+              ) : (
+                <div className="bg-yellow-900/20 border border-yellow-700/50 p-3 rounded-xl flex gap-3">
+                    <AlertTriangle className="text-yellow-500 shrink-0" size={20}/>
+                    <p className="text-xs text-yellow-200 leading-relaxed">
+                        У тебя нет добавленных машин в гараже. Если едешь пассажиром — ок. Если водителем — добавь тачку в профиле!
+                    </p>
+                </div>
+              )}
+              {/* --------------------- */}
+
               <div>
                 <label className="text-sm text-gray-400 mb-1.5 block">Твой телефон</label>
                 <div className="flex items-center bg-black/50 border border-gray-700 rounded-xl px-3 py-3 focus-within:border-offroad-orange transition-colors">
