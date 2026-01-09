@@ -1,6 +1,6 @@
 import { HashRouter as Router, Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { Calendar, Map, Home, User, ChevronRight, Loader2, CloudRain, PlayCircle, X, ExternalLink, BookOpen, Archive } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import WebApp from '@twa-dev/sdk';
 import { Toaster } from 'sonner';
@@ -10,6 +10,8 @@ import { getOptimizedUrl } from './utils';
 import EventDetails from './pages/EventDetails';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
+import Legal from './pages/Legal';
+import Participants from './pages/Participants'; // <--- ДОБАВИЛ
 
 // --- ТИПЫ ---
 interface Story { id: number; title: string; image_url: string; link: string; }
@@ -27,11 +29,17 @@ interface WikiArticle { id: number; title: string; content: string; image_url?: 
 // --- КОМПОНЕНТ-ЛОВУШКА ДЛЯ DEEP LINKS ---
 const DeepLinkHandler = () => {
   const navigate = useNavigate();
+  // Флаг, чтобы хендлер сработал только 1 раз при старте
+  const isHandled = useRef(false);
+
   useEffect(() => {
+    if (isHandled.current) return;
+
     const param = WebApp.initDataUnsafe.start_param;
     if (param && param.startsWith('event_')) {
       const eventId = param.split('_')[1];
-      navigate(`/event/${eventId}`);
+      isHandled.current = true; // Ставим метку, что отработали
+      navigate(`/event/${eventId}`, { replace: true }); 
     }
   }, [navigate]);
   return null;
@@ -43,22 +51,16 @@ const HomePage = () => {
   const user = WebApp.initDataUnsafe.user;
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Инициализируем null, чтобы не было скачка "Дефолт -> База"
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null); 
-  // Состояние: загрузилась ли сама картинка в браузере
+  const [bannerUrl, setBannerUrl] = useState('https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1200');
   const [isBannerImageLoaded, setIsBannerImageLoaded] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
-        // 1. Грузим новости
         const { data: storiesData } = await supabase.from('stories').select('*').order('created_at', { ascending: false }).limit(5);
         if (storiesData) setStories(storiesData);
 
-        // 2. Грузим ссылку на баннер
         const { data: settingsData } = await supabase.from('app_settings').select('value').eq('key', 'home_banner').single();
-        // Если в базе пусто, ставим дефолт, иначе из базы
-        setBannerUrl(settingsData?.value || 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1200');
+        if (settingsData) setBannerUrl(settingsData.value);
 
         setLoading(false);
     };
@@ -68,7 +70,6 @@ const HomePage = () => {
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 pb-32 animate-in fade-in duration-500 pt-6">
       
-      {/* Хедер */}
       <header className="flex justify-between items-center px-6">
         <div>
           <h1 className="text-3xl font-black text-white tracking-tighter">
@@ -87,39 +88,26 @@ const HomePage = () => {
         </div>
       </header>
 
-      {/* ГЛАВНЫЙ БАННЕР (С ПЛАВНОЙ ЗАГРУЗКОЙ) */}
       <div className="px-4"> 
         <div className="relative w-full aspect-[4/5] sm:aspect-video md:h-[500px] rounded-[32px] overflow-hidden shadow-2xl group isolate bg-gray-800">
-            
-            {/* 1. Скелетон (показывается, пока картинка не прогрузится) */}
-            {!isBannerImageLoaded && (
-                <div className="absolute inset-0 bg-gray-700 animate-pulse z-10" />
-            )}
-
-            {/* 2. Картинка (скрыта opacity-0, пока не сработает onLoad) */}
-            {bannerUrl && (
-                <img 
-                    src={getOptimizedUrl(bannerUrl, 1200)} 
-                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 transform group-hover:scale-105 ${isBannerImageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
-                    alt="Offroad Jeep"
-                    onLoad={() => setIsBannerImageLoaded(true)}
-                    onError={(e) => { e.currentTarget.style.display = 'none'; setIsBannerImageLoaded(true); }} // Если ошибка, убираем скелетон
-                />
-            )}
-            
+            {!isBannerImageLoaded && <div className="absolute inset-0 bg-gray-700 animate-pulse z-10" />}
+            <img 
+                src={getOptimizedUrl(bannerUrl, 1200)} 
+                className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 transform group-hover:scale-105 ${isBannerImageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
+                alt="Offroad Jeep"
+                onLoad={() => setIsBannerImageLoaded(true)}
+                onError={(e) => { e.currentTarget.style.display = 'none'; setIsBannerImageLoaded(true); }}
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20 pointer-events-none"></div>
-
             <div className="absolute bottom-0 left-0 right-0 p-8 flex flex-col items-start z-30">
                 <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full mb-4">
                     <div className="w-2 h-2 rounded-full bg-offroad-orange animate-pulse"></div>
                     <span className="text-white text-xs font-bold uppercase tracking-wider">Сезон Открыт</span>
                 </div>
-
                 <h2 className="text-5xl sm:text-6xl font-black text-white leading-[0.9] mb-4 drop-shadow-xl">
                   ВРЕМЯ<br/>
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-offroad-orange to-red-500">ГРЯЗИ</span>
                 </h2>
-                
                 <Link to="/events" className="w-full sm:w-auto bg-offroad-orange text-white font-black uppercase tracking-wide py-4 px-8 rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(249,115,22,0.4)] active:scale-[0.98] transition-all hover:bg-orange-600 hover:shadow-[0_0_30px_rgba(249,115,22,0.6)]">
                    <span>Открыть Календарь</span>
                    <ChevronRight size={20} />
@@ -128,7 +116,6 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* Лента новостей */}
       <div>
         <h3 className="text-xl font-bold text-white mb-4 px-6 flex items-center gap-2">
           <PlayCircle size={24} className="text-offroad-orange"/>
@@ -329,6 +316,10 @@ function App() {
           <Route path="/nav" element={<NavPage />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/legal" element={<Legal />} />
+          {/* РОУТ ДЛЯ УЧАСТНИКОВ */}
+          <Route path="/event/:id/participants" element={<Participants />} />
+          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <TabBar />

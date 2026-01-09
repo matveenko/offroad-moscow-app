@@ -1,28 +1,19 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import WebApp from '@twa-dev/sdk';
 import { 
-  ArrowLeft, 
-  MapPin, 
-  Calendar, 
-  Loader2, 
-  AlertTriangle, 
-  CheckCircle, 
-  CheckSquare, 
-  X, 
-  Users, 
-  Baby, 
-  Phone, 
-  Share2, 
-  Navigation, 
-  ExternalLink,
-  Car as CarIcon, // Добавил иконку
-  Anchor // Иконка для лебедки
-} from 'lucide-react';
+  ArrowLeft, MapPin, Calendar, Loader2, AlertTriangle, CheckCircle, 
+  X, Users, Baby, Phone, Share2, Navigation, ExternalLink, 
+  Car as CarIcon, Anchor, MessageSquare, CreditCard, Trash2, Home, 
+  PlusCircle, ChevronRight 
+} from 'lucide-react'; // Убрал CheckSquare, он не использовался
 import { toast } from 'sonner';
 import { getOptimizedUrl } from '../utils';
 import confetti from 'canvas-confetti';
+
+// --- КОШЕЛЕК ЮМАНИ ---
+const YOOMONEY_WALLET = "4100119444513570"; 
 
 interface Event {
   id: number;
@@ -35,6 +26,7 @@ interface Event {
   report_link?: string;
   is_archived?: boolean;
   warning_text?: string;
+  children_allowed?: boolean;
 }
 
 interface Participant {
@@ -43,7 +35,6 @@ interface Participant {
   avatar_url?: string;
 }
 
-// Интерфейс машины из твоей таблицы garage
 interface GarageCar {
   id: number;
   model: string;
@@ -55,15 +46,19 @@ interface GarageCar {
 export default function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   
   // Данные
   const [event, setEvent] = useState<Event | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [userCars, setUserCars] = useState<GarageCar[]>([]); // <-- СПИСОК МАШИН
+  const [userCars, setUserCars] = useState<GarageCar[]>([]);
   
   // Состояния
   const [loading, setLoading] = useState(true);
   const [isRegistered, setIsRegistered] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null); // pending | paid
+  const [regId, setRegId] = useState<number | null>(null); // ID заявки для отмены
+  
   const [showModal, setShowModal] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   
@@ -71,39 +66,29 @@ export default function EventDetails() {
   const [selectedCarId, setSelectedCarId] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
-    guests: 0,
-    children: false,
-    phone: ''
+    guests: 1, // Минимум 1 взрослый (водитель)
+    children: 0,
+    children_ages: '',
+    phone: '+7 ('
   });
 
   useEffect(() => {
     async function fetchData() {
       if (!id) return;
-      
       const user = WebApp.initDataUnsafe.user;
       
       // 1. Грузим событие
-      const { data: eventData, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', id)
-        .single();
+      const { data: eventData, error } = await supabase.from('events').select('*').eq('id', id).single();
+      if (error) console.error(error); else setEvent(eventData);
 
-      if (error) console.error(error);
-      else setEvent(eventData);
-
-      // 2. Грузим участников (для аватарок)
-      const { data: partData } = await supabase
-        .from('registrations')
-        .select('id, first_name, avatar_url')
-        .eq('event_id', id);
-      
+      // 2. Грузим участников
+      const { data: partData } = await supabase.from('registrations').select('id, first_name, avatar_url').eq('event_id', id);
       if (partData) setParticipants(partData);
 
       if (user) {
         const userId = user.id.toString();
 
-        // 3. Проверяем регистрацию текущего юзера
+        // 3. Проверяем регистрацию
         const { data: regData } = await supabase
           .from('registrations')
           .select('*')
@@ -111,114 +96,166 @@ export default function EventDetails() {
           .eq('user_id', userId)
           .single();
         
-        if (regData) setIsRegistered(true);
+        if (regData) {
+            setIsRegistered(true);
+            setPaymentStatus(regData.payment_status);
+            setRegId(regData.id);
+        }
 
-        // 4. ГРУЗИМ ГАРАЖ ЮЗЕРА
+        // 4. Грузим гараж
         const { data: garageData } = await supabase
           .from('garage')
           .select('*')
-          .eq('user_id', userId); // Используем text ID как в схеме
+          .eq('user_id', userId);
 
         if (garageData) {
           setUserCars(garageData);
-          // Если машина одна - выбираем сразу
           if (garageData.length === 1) {
             setSelectedCarId(garageData[0].id);
           }
         }
       }
+      
+      // Автозаполнение телефона
+      const savedPhone = localStorage.getItem('user_phone');
+      if (savedPhone) {
+          setFormData(prev => ({ ...prev, phone: savedPhone }));
+      }
+
       setLoading(false);
     }
     fetchData();
   }, [id]);
 
+  // --- УМНАЯ НАВИГАЦИЯ ---
+  const handleBack = () => {
+    if (location.state?.fromApp) {
+        navigate(-1);
+    } else {
+        navigate('/');
+    }
+  };
+
   // --- МАСКА ТЕЛЕФОНА ---
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value.replace(/\D/g, '');
-    if (val.length === 0) { setFormData({ ...formData, phone: '' }); return; }
-    if (val.startsWith('7')) val = val.slice(1); else if (val.startsWith('8')) val = val.slice(1);
-    
-    val = val.slice(0, 10);
+    if (!val) val = '7';
+    if (val[0] === '8') val = '7' + val.slice(1);
+    if (val[0] !== '7') val = '7' + val;
+
+    val = val.slice(0, 11);
+
     let formatted = '+7';
-    if (val.length > 0) formatted += ' (' + val.slice(0, 3);
-    if (val.length >= 3) formatted += ') ' + val.slice(3, 6);
-    if (val.length >= 6) formatted += '-' + val.slice(6, 8);
-    if (val.length >= 8) formatted += '-' + val.slice(8, 10);
+    if (val.length > 1) formatted += ' (' + val.slice(1, 4);
+    if (val.length >= 5) formatted += ') ' + val.slice(4, 7);
+    if (val.length >= 8) formatted += '-' + val.slice(7, 9);
+    if (val.length >= 10) formatted += '-' + val.slice(9, 11);
 
     setFormData({ ...formData, phone: formatted });
   };
 
-  // --- ЗАПИСЬ ---
+  // --- ЗАПИСЬ И ОПЛАТА ---
   const handleBooking = async () => {
     const user = WebApp.initDataUnsafe.user;
+    if (!user) { toast.error("Только через Telegram!"); return; }
     
-    if (!user) {
-      toast.error("Запись доступна только через Telegram!");
-      return;
+    // ЖЕСТКАЯ ПРОВЕРКА ГАРАЖА
+    if (userCars.length === 0) {
+        toast.error('У тебя нет машин! Добавь в Профиле.');
+        navigate('/profile'); // Кидаем добавлять тачку
+        return;
     }
 
-    if (formData.phone.length < 18) {
-      toast.error('Введите корректный номер телефона!');
-      return;
+    if (!selectedCarId) { 
+        toast.error('Выбери машину!'); 
+        return; 
     }
 
-    // Проверка выбора машины (если гараж не пустой)
-    if (userCars.length > 0 && !selectedCarId) {
-      toast.error('Выбери машину, на которой поедешь!');
-      return;
-    }
+    if (formData.phone.length < 18) { toast.error('Введите корректный номер телефона!'); return; }
+    if (formData.children > 0 && formData.children_ages.trim().length === 0) { toast.error('Укажите возраст детей!'); return; }
 
     setBookingLoading(true);
+    localStorage.setItem('user_phone', formData.phone);
 
-    // Формируем строку информации о машине
-    let carInfoString = "Пешеход / Пассажир";
-    
-    if (selectedCarId) {
-      const car = userCars.find(c => c.id === selectedCarId);
-      if (car) {
-        // Пример: Jeep Wrangler, 35", Лебедка
-        const parts = [car.model];
-        if (car.tires) parts.push(`${car.tires}"`);
-        if (car.has_winch) parts.push('Лебедка');
-        carInfoString = parts.join(', ');
-      }
+    // Инфо о машине
+    let carInfoString = "Неизвестно";
+    const car = userCars.find(c => c.id === selectedCarId);
+    if (car) {
+       carInfoString = `${car.model} (${car.tires}")`;
     }
 
-    const { error } = await supabase
+    // 1. Создаем запись (статус pending)
+    const { data: regData, error } = await supabase
       .from('registrations')
       .insert([
         { 
           event_id: event?.id, 
-          user_id: user.id.toString(),
-          first_name: user.first_name,
+          user_id: user.id.toString(), 
+          first_name: user.first_name, 
           username: user.username,
           guests_count: formData.guests,
-          has_children: formData.children,
+          children_count: formData.children, 
+          has_children: formData.children > 0,
+          children_ages: formData.children > 0 ? formData.children_ages : null,
           phone: formData.phone,
           avatar_url: user.photo_url,
-          car_info: carInfoString // <-- Сохраняем инфо о машине
+          car_info: carInfoString,
+          payment_status: event?.price === 0 ? 'paid' : 'pending'
         }
-      ]);
+      ])
+      .select()
+      .single();
 
     if (error) {
       toast.error("Ошибка записи: " + error.message);
-    } else {
-      setIsRegistered(true);
-      setShowModal(false);
-      toast.success('Ура! Ты в команде!');
-      WebApp.HapticFeedback.notificationOccurred('success');
-      
-      setParticipants(prev => [...prev, { id: Date.now(), first_name: user.first_name, avatar_url: user.photo_url }]);
-
-      confetti({
-        particleCount: 150,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ['#f97316', '#ffffff', '#000000'],
-        disableForReducedMotion: true
-      });
+      setBookingLoading(false);
+      return;
     }
+
+    // 2. ЕСЛИ ПЛАТНО -> ЮМАНИ
+    if (event?.price && event.price > 0) {
+        const label = `reg_${regData.id}`; 
+        const successURL = `https://t.me/OffroadMoscow_bot/app?startapp=event_${event?.id}`;
+        const yooMoneyUrl = `https://yoomoney.ru/quickpay/confirm?receiver=${YOOMONEY_WALLET}&label=${label}&quickpay-form=shop&targets=${encodeURIComponent("Взнос: " + event?.title)}&sum=${event?.price}&paymentType=AC&successURL=${encodeURIComponent(successURL)}`;
+
+        WebApp.openLink(yooMoneyUrl);
+        toast.info('Переходим к оплате...');
+        setPaymentStatus('pending');
+    } 
+    // 3. ЕСЛИ БЕСПЛАТНО -> УСПЕХ
+    else {
+        toast.success('Ура! Ты в команде!');
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#f97316', '#ffffff'] });
+        setPaymentStatus('paid');
+    }
+
+    setIsRegistered(true);
+    setRegId(regData.id);
+    setShowModal(false);
+    
+    setParticipants(prev => [...prev, { id: Date.now(), first_name: user.first_name, avatar_url: user.photo_url }]);
     setBookingLoading(false);
+  };
+
+  // --- ОТМЕНА ЗАЯВКИ ---
+  const handleCancelBooking = async () => {
+    if (!regId) return;
+    if (!confirm('Отменить заявку и попробовать снова?')) return;
+
+    const { error } = await supabase.from('registrations').delete().eq('id', regId);
+    
+    if (error) {
+        toast.error('Ошибка отмены');
+    } else {
+        setIsRegistered(false);
+        setPaymentStatus(null);
+        setRegId(null);
+        toast.success('Отменено');
+        const user = WebApp.initDataUnsafe.user;
+        if (user) {
+          setParticipants(prev => prev.filter(p => p.first_name !== user.first_name));
+        }
+    }
   };
 
   const handleShare = () => {
@@ -237,6 +274,25 @@ export default function EventDetails() {
       WebApp.openLink(url);
   };
 
+  const updateGuests = (delta: number) => {
+    setFormData(prev => {
+        const newVal = prev.guests + delta;
+        if (newVal < 1) return prev; 
+        if (newVal > 5) { toast.warning('Максимум 5 взрослых!'); return prev; }
+        return { ...prev, guests: newVal };
+    });
+  };
+
+  const updateChildren = (delta: number) => {
+    setFormData(prev => {
+        const newVal = prev.children + delta;
+        if (newVal < 0) return prev;
+        if (newVal > 5) { toast.warning('Куда столько детей?!'); return prev; }
+        if (newVal === 0) return { ...prev, children: 0, children_ages: '' };
+        return { ...prev, children: newVal };
+    });
+  };
+
   if (loading) return <div className="flex h-screen items-center justify-center text-offroad-orange"><Loader2 className="animate-spin" size={40} /></div>;
   if (!event) return <div className="p-6 text-white">Выезд не найден.</div>;
 
@@ -246,8 +302,8 @@ export default function EventDetails() {
       {/* Навигация */}
       <div className="absolute top-4 left-4 z-20 flex justify-between w-full pr-8 max-w-5xl mx-auto pointer-events-none">
         <div className="pointer-events-auto flex w-full justify-between px-4 sm:px-0">
-            <button onClick={() => navigate(-1)} className="bg-black/50 backdrop-blur-md p-2.5 rounded-full text-white hover:bg-offroad-orange transition border border-white/10 shadow-lg">
-                <ArrowLeft size={24} />
+            <button onClick={handleBack} className="bg-black/50 backdrop-blur-md p-2.5 rounded-full text-white hover:bg-offroad-orange transition border border-white/10 shadow-lg">
+                {location.state?.fromApp ? <ArrowLeft size={24} /> : <Home size={24} />}
             </button>
             <button onClick={handleShare} className="bg-black/50 backdrop-blur-md p-2.5 rounded-full text-white hover:bg-offroad-orange transition border border-white/10 shadow-lg">
                 <Share2 size={24} />
@@ -285,30 +341,40 @@ export default function EventDetails() {
           </button>
         </div>
 
-        {/* БЛОК УЧАСТНИКОВ */}
+        {/* Участники (КЛИКАБЕЛЬНЫЙ БЛОК) */}
         {participants.length > 0 && (
-            <div className="mb-8 flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5 backdrop-blur-sm shadow-lg">
-                <div className="flex -space-x-3">
-                    {participants.slice(0, 5).map((p) => (
-                        <div key={p.id} className="w-10 h-10 rounded-full border-2 border-offroad-dark bg-gray-700 overflow-hidden relative z-10">
-                            {p.avatar_url ? (
-                                <img src={getOptimizedUrl(p.avatar_url, 100)} className="w-full h-full object-cover"/>
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-offroad-orange text-white font-bold text-xs">
-                                    {p.first_name[0]}
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                    {participants.length > 5 && (
-                        <div className="w-10 h-10 rounded-full border-2 border-offroad-dark bg-gray-800 flex items-center justify-center text-xs font-bold text-white relative z-20">
-                            +{participants.length - 5}
-                        </div>
-                    )}
+            <div 
+                onClick={() => navigate(`/event/${id}/participants`)} 
+                className="mb-8 flex items-center justify-between bg-white/5 p-3 rounded-2xl border border-white/5 backdrop-blur-sm shadow-lg cursor-pointer hover:bg-white/10 transition-colors group"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="flex -space-x-3">
+                        {participants.slice(0, 5).map((p) => (
+                            <div key={p.id} className="w-10 h-10 rounded-full border-2 border-offroad-dark bg-gray-700 overflow-hidden relative z-10">
+                                {p.avatar_url ? (
+                                    <img src={getOptimizedUrl(p.avatar_url, 100)} className="w-full h-full object-cover"/>
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-offroad-orange text-white font-bold text-xs">
+                                        {p.first_name[0]}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {participants.length > 5 && (
+                            <div className="w-10 h-10 rounded-full border-2 border-offroad-dark bg-gray-800 flex items-center justify-center text-xs font-bold text-white relative z-20">
+                                +{participants.length - 5}
+                            </div>
+                        )}
+                    </div>
+                    <div className="text-sm text-gray-300 font-medium">
+                        <span className="text-white font-bold">{participants.length}</span> {participants.length === 1 ? 'человек едет' : 'чел. едут'}
+                    </div>
                 </div>
-                <div className="text-sm text-gray-300 font-medium">
-    <span className="text-white font-bold">{participants.length}</span> {participants.length === 1 ? 'человек уже едет!' : 'чел. уже едут!'}
-            </div>
+                
+                {/* Стрелочка */}
+                <div className="bg-white/10 p-1.5 rounded-full text-gray-400 group-hover:text-white group-hover:bg-offroad-orange transition-all">
+                     <ChevronRight size={16} />
+                </div>
             </div>
         )}
 
@@ -352,12 +418,25 @@ export default function EventDetails() {
                     </button>
                 )
             ) : isRegistered ? (
-              <button disabled className="flex-1 bg-green-600/20 border border-green-600 text-green-500 font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 font-sans">
-                <CheckCircle size={20} /> Ты в деле!
-              </button>
+              // ЛОГИКА ПОСЛЕ ОПЛАТЫ
+              paymentStatus === 'paid' ? (
+                  <button disabled className="flex-1 bg-green-600/20 border border-green-600 text-green-500 font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 font-sans">
+                    <CheckCircle size={20} /> Оплачено!
+                  </button>
+              ) : (
+                  // ЖДЕМ ОПЛАТУ + КНОПКА ОТМЕНЫ
+                  <div className="flex-1 flex gap-2">
+                     <button onClick={() => toast.info('Проверь оплату в ЮMoney')} className="flex-1 bg-yellow-600/20 border border-yellow-600 text-yellow-500 font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 font-sans animate-pulse">
+                        <Loader2 size={20} className="animate-spin"/> Ждем...
+                     </button>
+                     <button onClick={handleCancelBooking} className="w-14 bg-gray-800 border border-gray-700 rounded-xl flex items-center justify-center text-gray-400 hover:text-red-400 transition-colors">
+                        <Trash2 size={20} />
+                     </button>
+                  </div>
+              )
             ) : (
               <button onClick={() => setShowModal(true)} className="flex-1 bg-offroad-orange hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(249,115,22,0.4)] active:scale-95 transition-all font-display uppercase tracking-wide">
-                Вписаться
+                {event.price === 0 ? 'Записаться бесплатно' : 'Вписаться'}
               </button>
             )}
         </div>
@@ -374,7 +453,7 @@ export default function EventDetails() {
 
             <div className="space-y-5 font-sans">
               
-              {/* --- ВЫБОР МАШИНЫ --- */}
+              {/* ВЫБОР МАШИНЫ */}
               {userCars.length > 0 ? (
                 <div>
                    <label className="text-sm text-gray-400 mb-2 block font-medium">Твоя тачка</label>
@@ -405,38 +484,99 @@ export default function EventDetails() {
               ) : (
                 <div className="bg-yellow-900/20 border border-yellow-700/50 p-3 rounded-xl flex gap-3">
                     <AlertTriangle className="text-yellow-500 shrink-0" size={20}/>
-                    <p className="text-xs text-yellow-200 leading-relaxed">
-                        У тебя нет добавленных машин в гараже. Если едешь пассажиром — ок. Если водителем — добавь тачку в профиле!
-                    </p>
+                    <div className="text-xs text-yellow-200 leading-relaxed">
+                        У тебя нет добавленных машин в гараже. Добавь тачку в профиле!
+                        {/* ОШИБКА БЫЛА ТУТ: block mt-2 ... flex 
+                            ИСПРАВИЛ: просто убрал block
+                        */}
+                        <button onClick={() => navigate('/profile')} className="mt-2 text-offroad-orange underline font-bold flex items-center gap-1"><PlusCircle size={14}/> Добавить сейчас</button>
+                    </div>
                 </div>
               )}
-              {/* --------------------- */}
 
+              {/* ТЕЛЕФОН */}
               <div>
                 <label className="text-sm text-gray-400 mb-1.5 block">Твой телефон</label>
                 <div className="flex items-center bg-black/50 border border-gray-700 rounded-xl px-3 py-3 focus-within:border-offroad-orange transition-colors">
                   <Phone size={18} className="text-gray-500 mr-3"/>
-                  <input type="tel" placeholder="+7 (999) 000-00-00" className="bg-transparent text-white w-full outline-none placeholder:text-gray-600 font-medium" value={formData.phone} onChange={handlePhoneChange} maxLength={18}/>
+                  <input 
+                    type="tel" 
+                    placeholder="+7 (999) 000-00-00" 
+                    className="bg-transparent text-white w-full outline-none placeholder:text-gray-600 font-medium" 
+                    value={formData.phone} 
+                    onChange={handlePhoneChange} 
+                    maxLength={18}
+                  />
                 </div>
               </div>
 
+              {/* ВЗРОСЛЫЕ */}
               <div className="flex justify-between items-center bg-black/50 border border-gray-700 rounded-xl p-3">
-                <div className="flex items-center gap-2"><Users size={18} className="text-offroad-orange"/><span className="text-sm font-medium">Гости в машине</span></div>
+                <div className="flex items-center gap-2">
+                    <Users size={18} className="text-offroad-orange"/>
+                    <span className="text-sm font-medium">Взрослые (включая тебя)</span>
+                </div>
                 <div className="flex items-center gap-3">
-                   <button onClick={() => setFormData(p => ({...p, guests: Math.max(0, p.guests - 1)}))} className={`w-9 h-9 rounded-full flex items-center justify-center text-xl font-bold transition-colors ${formData.guests === 0 ? 'bg-gray-800 text-gray-600' : 'bg-gray-700 hover:bg-gray-600 text-white'}`} disabled={formData.guests === 0}>-</button>
+                   <button onClick={() => updateGuests(-1)} className={`w-9 h-9 rounded-full flex items-center justify-center text-xl font-bold transition-colors ${formData.guests <= 1 ? 'bg-gray-800 text-gray-600' : 'bg-gray-700 hover:bg-gray-600 text-white'}`} disabled={formData.guests <= 1}>-</button>
                    <span className="w-6 text-center font-bold text-lg">{formData.guests}</span>
-                   <button onClick={() => { if (formData.guests >= 4) { toast.warning('Максимум 4 пассажира!'); return; } setFormData(p => ({...p, guests: p.guests + 1})); }} className={`w-9 h-9 rounded-full flex items-center justify-center text-xl font-bold transition-colors ${formData.guests >= 4 ? 'bg-red-900/30 text-red-400 border border-red-900' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}>+</button>
+                   <button onClick={() => updateGuests(1)} className={`w-9 h-9 rounded-full flex items-center justify-center text-xl font-bold transition-colors ${formData.guests >= 5 ? 'bg-red-900/30 text-red-400 border border-red-900' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}>+</button>
                 </div>
               </div>
 
-              <div className={`flex justify-between items-center border rounded-xl p-3 transition-colors cursor-pointer ${formData.children ? 'bg-offroad-orange/10 border-offroad-orange' : 'bg-black/50 border-gray-700'}`} onClick={() => setFormData(p => ({...p, children: !p.children}))}>
-                <div className="flex items-center gap-3"><Baby size={20} className={formData.children ? "text-offroad-orange" : "text-gray-500"}/><span className="text-sm font-medium">Со мной будут дети</span></div>
-                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.children ? 'bg-offroad-orange border-offroad-orange' : 'border-gray-500'}`}>{formData.children && <CheckSquare size={14} className="text-white" />}</div>
+              {/* ДЕТИ (ЕСЛИ РАЗРЕШЕНО) */}
+              {event?.children_allowed !== false && (
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center bg-black/50 border border-gray-700 rounded-xl p-3">
+                    <div className="flex items-center gap-2">
+                        <Baby size={18} className="text-offroad-orange"/>
+                        <span className="text-sm font-medium">Дети</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => updateChildren(-1)} className={`w-9 h-9 rounded-full flex items-center justify-center text-xl font-bold transition-colors ${formData.children === 0 ? 'bg-gray-800 text-gray-600' : 'bg-gray-700 hover:bg-gray-600 text-white'}`} disabled={formData.children === 0}>-</button>
+                        <span className="w-6 text-center font-bold text-lg">{formData.children}</span>
+                        <button onClick={() => updateChildren(1)} className={`w-9 h-9 rounded-full flex items-center justify-center text-xl font-bold transition-colors ${formData.children >= 5 ? 'bg-red-900/30 text-red-400 border border-red-900' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}>+</button>
+                    </div>
+                    </div>
+
+                    {/* ВОЗРАСТ ДЕТЕЙ */}
+                    {formData.children > 0 && (
+                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                            <label className="text-sm text-gray-400 mb-1.5 block">Возраст детей (цифры через запятую)</label>
+                            <div className="flex items-center bg-black/50 border border-gray-700 rounded-xl px-3 py-3 focus-within:border-offroad-orange transition-colors">
+                                <MessageSquare size={18} className="text-gray-500 mr-3"/>
+                                <input 
+                                type="text" 
+                                placeholder="Например: 5, 8, 12" 
+                                className="bg-transparent text-white w-full outline-none placeholder:text-gray-600 font-medium" 
+                                value={formData.children_ages} 
+                                onChange={(e) => setFormData({...formData, children_ages: e.target.value})}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+              )}
+
+              {/* КНОПКА ЗАПИСИ (ТЕКСТ МЕНЯЕТСЯ ОТ ЦЕНЫ) */}
+              {userCars.length > 0 ? (
+                <button onClick={handleBooking} disabled={bookingLoading} className="w-full bg-offroad-orange text-white font-bold py-3.5 rounded-xl mt-2 flex justify-center items-center gap-2 shadow-lg shadow-orange-900/20 active:scale-[0.98] transition-transform uppercase tracking-wide font-display">
+                    {bookingLoading ? <Loader2 className="animate-spin"/> : (
+                        event?.price === 0 ? <><CheckCircle size={20}/> Записаться бесплатно</> : <><CreditCard size={20}/> Перейти к оплате</>
+                    )}
+                </button>
+              ) : (
+                <button onClick={() => navigate('/profile')} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl mt-2 flex justify-center items-center gap-2 shadow-lg active:scale-[0.98] transition-transform uppercase tracking-wide font-display">
+                    <PlusCircle size={20}/> Добавить машину
+                </button>
+              )}
+              
+              {/* LEGAL LINK */}
+              <div className="text-center pt-2">
+                  <Link to="/legal" className="text-[10px] text-gray-500 underline hover:text-gray-300">
+                      Нажимая кнопку, вы принимаете условия Соглашения
+                  </Link>
               </div>
 
-              <button onClick={handleBooking} disabled={bookingLoading} className="w-full bg-offroad-orange text-white font-bold py-3.5 rounded-xl mt-2 flex justify-center items-center gap-2 shadow-lg shadow-orange-900/20 active:scale-[0.98] transition-transform uppercase tracking-wide font-display">
-                {bookingLoading ? <Loader2 className="animate-spin"/> : 'Подтвердить запись'}
-              </button>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Loader2, X, Link as LinkIcon, Archive, AlertTriangle } from 'lucide-react';
+import { Loader2, X, Link as LinkIcon, Archive, AlertTriangle, Baby } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface EventData {
@@ -13,7 +13,8 @@ interface EventData {
   image_url?: string | null;
   report_link?: string | null;
   is_archived?: boolean;
-  warning_text?: string | null; // <-- НОВОЕ ПОЛЕ
+  warning_text?: string | null;
+  children_allowed?: boolean; // <-- НОВОЕ ПОЛЕ
 }
 
 interface AdminFormProps {
@@ -32,7 +33,8 @@ export default function AdminForm({ event, onClose, onSave }: AdminFormProps) {
     image_url: event?.image_url || '',
     report_link: event?.report_link || '',
     is_archived: event?.is_archived || false,
-    warning_text: event?.warning_text || '', // <-- Инициализация
+    warning_text: event?.warning_text || '',
+    children_allowed: event?.children_allowed ?? true, // <-- По дефолту можно
   });
   const [loading, setLoading] = useState(false);
 
@@ -48,7 +50,8 @@ export default function AdminForm({ event, onClose, onSave }: AdminFormProps) {
         ...formData, 
         price: Number(formData.price),
         report_link: formData.report_link || null,
-        warning_text: formData.warning_text || null
+        warning_text: formData.warning_text || null,
+        children_allowed: formData.children_allowed
     };
 
     try {
@@ -81,26 +84,28 @@ export default function AdminForm({ event, onClose, onSave }: AdminFormProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* АРХИВ */}
-          <div 
-            onClick={() => setFormData(prev => ({ ...prev, is_archived: !prev.is_archived }))}
-            className={`cursor-pointer p-4 rounded-xl border flex items-center justify-between transition-colors ${formData.is_archived ? 'bg-offroad-orange/20 border-offroad-orange' : 'bg-black/30 border-gray-700'}`}
-          >
-            <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.is_archived ? 'bg-offroad-orange text-white' : 'bg-gray-800 text-gray-500'}`}>
-                    <Archive size={20}/>
-                </div>
-                <div>
-                    <div className={`font-bold ${formData.is_archived ? 'text-offroad-orange' : 'text-gray-300'}`}>
-                        {formData.is_archived ? 'В АРХИВЕ' : 'АКТИВНЫЙ ВЫЕЗД'}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                        {formData.is_archived ? 'Скрыт в "Прошедшие"' : 'Виден в календаре'}
-                    </div>
-                </div>
+          {/* НАСТРОЙКИ (АРХИВ + ДЕТИ) */}
+          <div className="grid grid-cols-2 gap-3">
+             {/* АРХИВ */}
+            <div 
+                onClick={() => setFormData(prev => ({ ...prev, is_archived: !prev.is_archived }))}
+                className={`cursor-pointer p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-2 transition-colors ${formData.is_archived ? 'bg-offroad-orange/20 border-offroad-orange' : 'bg-black/30 border-gray-700'}`}
+            >
+                <Archive size={20} className={formData.is_archived ? 'text-offroad-orange' : 'text-gray-500'}/>
+                <span className={`text-xs font-bold ${formData.is_archived ? 'text-offroad-orange' : 'text-gray-400'}`}>
+                    {formData.is_archived ? 'В АРХИВЕ' : 'АКТИВЕН'}
+                </span>
             </div>
-            <div className={`w-6 h-6 rounded border flex items-center justify-center ${formData.is_archived ? 'bg-offroad-orange border-offroad-orange' : 'border-gray-600'}`}>
-                {formData.is_archived && <X size={16} className="text-white rotate-45"/>}
+
+            {/* ДЕТИ */}
+            <div 
+                onClick={() => setFormData(prev => ({ ...prev, children_allowed: !prev.children_allowed }))}
+                className={`cursor-pointer p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-2 transition-colors ${formData.children_allowed ? 'bg-green-900/20 border-green-600' : 'bg-red-900/20 border-red-600'}`}
+            >
+                <Baby size={20} className={formData.children_allowed ? 'text-green-500' : 'text-red-500'}/>
+                <span className={`text-xs font-bold ${formData.children_allowed ? 'text-green-500' : 'text-red-500'}`}>
+                    {formData.children_allowed ? 'ДЕТИ: ДА' : 'ДЕТИ: НЕТ'}
+                </span>
             </div>
           </div>
 
@@ -136,22 +141,22 @@ export default function AdminForm({ event, onClose, onSave }: AdminFormProps) {
             <textarea name="description" value={formData.description} onChange={handleChange} rows={4} className="bg-black/50 border border-gray-700 rounded-xl px-3 py-3 w-full outline-none text-white resize-none focus:border-offroad-orange"/>
           </div>
 
-          {/* ПРЕДУПРЕЖДЕНИЕ (НОВОЕ) */}
+          {/* ПРЕДУПРЕЖДЕНИЕ */}
           <div>
-            <label className="text-sm text-red-400 mb-1 flex items-center gap-2 font-bold"><AlertTriangle size={14}/> Текст предупреждения (красная плашка)</label>
+            <label className="text-sm text-red-400 mb-1 flex items-center gap-2 font-bold"><AlertTriangle size={14}/> Текст предупреждения</label>
             <textarea 
                 name="warning_text" 
                 value={formData.warning_text || ''} 
                 onChange={handleChange} 
                 rows={2} 
-                placeholder="Если пусто — будет стандартный текст про грязь и ошибки."
+                placeholder="Если пусто — будет стандартный текст."
                 className="bg-black/50 border border-red-900/50 rounded-xl px-3 py-3 w-full outline-none text-white resize-none focus:border-red-500"
             />
           </div>
 
           {/* ССЫЛКА НА ОТЧЕТ */}
           <div className="pt-2 border-t border-gray-700">
-            <label className="text-sm text-offroad-orange mb-1 flex items-center gap-2 font-bold"><LinkIcon size={14}/> Ссылка на отчет (Telegram)</label>
+            <label className="text-sm text-offroad-orange mb-1 flex items-center gap-2 font-bold"><LinkIcon size={14}/> Ссылка на отчет</label>
             <input type="text" name="report_link" value={formData.report_link || ''} onChange={handleChange} placeholder="https://t.me/channel/123" className="bg-black/50 border border-gray-700 rounded-xl px-3 py-3 w-full outline-none text-white focus:border-offroad-orange"/>
           </div>
 
